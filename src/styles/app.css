@@ -1,0 +1,255 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------ */
+/* iMechanic design system — tokens                                    */
+/*                                                                     */
+/* Two-level tokens:                                                   */
+/*   --ui-*     raw values, flipped between light and dark on :root    */
+/*   --color-*  Tailwind theme names that point at the raw values      */
+/*                                                                     */
+/* Never hard-code a hex in a component. Use the role utilities        */
+/* (bg-surface, text-fg-muted, border-line, text-ok-fg, …).            */
+/* The four --color-navy-* brand values are intentionally NOT themed:  */
+/* the header and tab bar stay navy in both themes.                    */
+/* ------------------------------------------------------------------ */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, Helvetica, Arial, sans-serif;
+
+  /* Brand — fixed in both themes */
+  --color-navy-950: #0b1220;
+  --color-navy-900: #101a2e;
+  --color-navy-800: #16223c;
+  --color-navy-700: #1f2f4f;
+
+  /* Surfaces and text */
+  --color-app-bg: var(--ui-app-bg);
+  --color-surface: var(--ui-surface);
+  --color-surface-sunken: var(--ui-surface-sunken);
+  --color-surface-raised: var(--ui-surface-raised);
+  --color-line: var(--ui-line);
+  --color-line-strong: var(--ui-line-strong);
+  --color-fg: var(--ui-fg);
+  --color-fg-muted: var(--ui-fg-muted);
+  --color-fg-subtle: var(--ui-fg-subtle);
+  --color-fg-invert: var(--ui-fg-invert);
+
+  /* Brand accent (amber). Standardised on amber-400 for marks. */
+  --color-brand: var(--ui-brand);
+  --color-brand-strong: var(--ui-brand-strong);
+  --color-brand-fg: var(--ui-brand-fg);
+  --color-on-brand: var(--ui-on-brand);
+
+  /* Severity — drive on (ok) */
+  --color-ok-fill: var(--ui-ok-fill);
+  --color-ok-border: var(--ui-ok-border);
+  --color-ok-fg: var(--ui-ok-fg);
+  --color-ok-solid: var(--ui-ok-solid);
+  --color-on-ok: var(--ui-on-ok);
+
+  /* Severity — repair soon (warn) */
+  --color-warn-fill: var(--ui-warn-fill);
+  --color-warn-border: var(--ui-warn-border);
+  --color-warn-fg: var(--ui-warn-fg);
+  --color-warn-solid: var(--ui-warn-solid);
+  --color-on-warn: var(--ui-on-warn);
+
+  /* Severity — stop driving (danger) */
+  --color-danger-fill: var(--ui-danger-fill);
+  --color-danger-border: var(--ui-danger-border);
+  --color-danger-fg: var(--ui-danger-fg);
+  --color-danger-solid: var(--ui-danger-solid);
+  --color-on-danger: var(--ui-on-danger);
+
+  /* Severity — unknown / not yet assessed (neutral) */
+  --color-neutral-fill: var(--ui-neutral-fill);
+  --color-neutral-border: var(--ui-neutral-border);
+  --color-neutral-fg: var(--ui-neutral-fg);
+
+  --color-focus: var(--ui-focus);
+
+  /* Shape */
+  --radius-card: 1rem;
+  --radius-control: 0.75rem;
+
+  /* Minimum comfortable tap target — 48px, glove-and-daylight sized */
+  --spacing-tap: 3rem;
+}
+
+/* -------------------------------------------------------------- */
+/* Role values. Unlayered on purpose so they win over @layer theme. */
+/* -------------------------------------------------------------- */
+
+:root {
+  color-scheme: light;
+
+  --ui-app-bg: #f1f5f9;
+  --ui-surface: #ffffff;
+  --ui-surface-sunken: #f8fafc;
+  --ui-surface-raised: #ffffff;
+  --ui-line: #e2e8f0;
+  --ui-line-strong: #cbd5e1;
+  --ui-fg: #0f172a;
+  --ui-fg-muted: #475569;
+  --ui-fg-subtle: #64748b;
+  --ui-fg-invert: #ffffff;
+
+  --ui-brand: #fbbf24;
+  --ui-brand-strong: #f59e0b;
+  --ui-brand-fg: #92400e;
+  --ui-on-brand: #0b1220;
+
+  --ui-ok-fill: #ecfdf5;
+  --ui-ok-border: #047857;
+  --ui-ok-fg: #064e3b;
+  --ui-ok-solid: #047857;
+  --ui-on-ok: #ffffff;
+
+  --ui-warn-fill: #fff7ed;
+  --ui-warn-border: #c2410c;
+  --ui-warn-fg: #7c2d12;
+  --ui-warn-solid: #c2410c;
+  --ui-on-warn: #ffffff;
+
+  --ui-danger-fill: #fef2f2;
+  --ui-danger-border: #b91c1c;
+  --ui-danger-fg: #7f1d1d;
+  --ui-danger-solid: #b91c1c;
+  --ui-on-danger: #ffffff;
+
+  --ui-neutral-fill: #f1f5f9;
+  --ui-neutral-border: #94a3b8;
+  --ui-neutral-fg: #334155;
+
+  --ui-focus: #f59e0b;
+}
+
+.dark {
+  color-scheme: dark;
+
+  --ui-app-bg: #070d18;
+  --ui-surface: #101a2e;
+  --ui-surface-sunken: #0b1220;
+  --ui-surface-raised: #16223c;
+  --ui-line: #24334f;
+  --ui-line-strong: #3a4c6f;
+  --ui-fg: #f1f5f9;
+  --ui-fg-muted: #b4c0d4;
+  --ui-fg-subtle: #94a3b8;
+  --ui-fg-invert: #0b1220;
+
+  --ui-brand: #fbbf24;
+  --ui-brand-strong: #fcd34d;
+  --ui-brand-fg: #fcd34d;
+  --ui-on-brand: #0b1220;
+
+  --ui-ok-fill: #06251c;
+  --ui-ok-border: #34d399;
+  --ui-ok-fg: #6ee7b7;
+  --ui-ok-solid: #34d399;
+  --ui-on-ok: #04231a;
+
+  --ui-warn-fill: #2e1607;
+  --ui-warn-border: #fb923c;
+  --ui-warn-fg: #fdba74;
+  --ui-warn-solid: #fb923c;
+  --ui-on-warn: #2e1607;
+
+  --ui-danger-fill: #350f10;
+  --ui-danger-border: #f87171;
+  --ui-danger-fg: #fca5a5;
+  --ui-danger-solid: #f87171;
+  --ui-on-danger: #350f10;
+
+  --ui-neutral-fill: #16223c;
+  --ui-neutral-border: #64748b;
+  --ui-neutral-fg: #cbd5e1;
+
+  --ui-focus: #fbbf24;
+
+  /* Re-declared locally so a NESTED `.dark` subtree (the gallery's dark
+     preview panes) resolves the role tokens at that element instead of
+     inheriting the already-substituted values from :root. */
+  --color-app-bg: var(--ui-app-bg);
+  --color-surface: var(--ui-surface);
+  --color-surface-sunken: var(--ui-surface-sunken);
+  --color-surface-raised: var(--ui-surface-raised);
+  --color-line: var(--ui-line);
+  --color-line-strong: var(--ui-line-strong);
+  --color-fg: var(--ui-fg);
+  --color-fg-muted: var(--ui-fg-muted);
+  --color-fg-subtle: var(--ui-fg-subtle);
+  --color-fg-invert: var(--ui-fg-invert);
+  --color-brand: var(--ui-brand);
+  --color-brand-strong: var(--ui-brand-strong);
+  --color-brand-fg: var(--ui-brand-fg);
+  --color-on-brand: var(--ui-on-brand);
+  --color-ok-fill: var(--ui-ok-fill);
+  --color-ok-border: var(--ui-ok-border);
+  --color-ok-fg: var(--ui-ok-fg);
+  --color-ok-solid: var(--ui-ok-solid);
+  --color-on-ok: var(--ui-on-ok);
+  --color-warn-fill: var(--ui-warn-fill);
+  --color-warn-border: var(--ui-warn-border);
+  --color-warn-fg: var(--ui-warn-fg);
+  --color-warn-solid: var(--ui-warn-solid);
+  --color-on-warn: var(--ui-on-warn);
+  --color-danger-fill: var(--ui-danger-fill);
+  --color-danger-border: var(--ui-danger-border);
+  --color-danger-fg: var(--ui-danger-fg);
+  --color-danger-solid: var(--ui-danger-solid);
+  --color-on-danger: var(--ui-on-danger);
+  --color-neutral-fill: var(--ui-neutral-fill);
+  --color-neutral-border: var(--ui-neutral-border);
+  --color-neutral-fg: var(--ui-neutral-fg);
+  --color-focus: var(--ui-focus);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-white font-sans text-slate-900 antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  /* Only the dark theme changes the document background; the light theme is
+     byte-for-byte what the marketing page already shipped with. */
+  .dark body {
+    background-color: var(--color-app-bg);
+    color: var(--color-fg);
+  }
+  section {
+    scroll-margin-top: 4.5rem;
+  }
+  /* Visible keyboard focus everywhere — people use this app one-handed,
+     in bad light, sometimes with an external keyboard on desktop. */
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+  /* No grey flash on tap; taps should feel instant on a phone. */
+  a,
+  button,
+  [role="button"],
+  input,
+  select,
+  textarea {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@layer utilities {
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .min-h-safe-tap {
+    min-height: 3rem;
+  }
+}
