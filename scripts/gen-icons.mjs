@@ -148,6 +148,23 @@ function encodePng(width, height, rgba) {
   ]);
 }
 
+/** Composite any transparency onto a solid background (QA defect D16):
+ *  iOS composites a transparent apple-touch-icon onto BLACK, so that icon
+ *  must be flattened onto the brand navy instead. */
+function flatten(rgba, [br, bg, bb]) {
+  const out = Buffer.from(rgba);
+  for (let i = 0; i < out.length; i += 4) {
+    const a = out[i + 3] / 255;
+    out[i] = Math.round(out[i] * a + br * (1 - a));
+    out[i + 1] = Math.round(out[i + 1] * a + bg * (1 - a));
+    out[i + 2] = Math.round(out[i + 2] * a + bb * (1 - a));
+    out[i + 3] = 255;
+  }
+  return out;
+}
+
+const NAVY_950 = [0x0b, 0x12, 0x20]; // --color-navy-950, the PWA theme colour
+
 function main() {
   // Master source asset lives outside public/ so the 1MB original is never
   // shipped to visitors (QA defect D20); only the resized icons are served.
@@ -158,12 +175,14 @@ function main() {
     ["public/icons/icon-512.png", 512],
     ["public/icons/icon-192.png", 192],
     ["public/icons/icon-maskable-512.png", 512],
+    ["public/icons/apple-touch-icon.png", 180, { opaque: true }],
   ];
-  for (const [file, size] of jobs) {
-    const resized = resize(rgba, width, height, size, size);
+  for (const [file, size, opts] of jobs) {
+    let resized = resize(rgba, width, height, size, size);
+    if (opts?.opaque) resized = flatten(resized, NAVY_950);
     mkdirSync("public/icons", { recursive: true });
     writeFileSync(file, encodePng(size, size, resized));
-    console.log(`wrote ${file} (${size}x${size})`);
+    console.log(`wrote ${file} (${size}x${size}${opts?.opaque ? ", opaque" : ""})`);
   }
 }
 

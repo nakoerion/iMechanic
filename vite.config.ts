@@ -5,6 +5,14 @@ import { defineConfig } from "vite";
 import tsConfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
+  // Unique per build (QA defect D9). Stamped into the service-worker
+  // registration URL (`/sw.js?v=<id>`); sw.js reads it from its own query
+  // string and uses it in the cache name, so every deploy invalidates the
+  // previous build's caches. `define` cannot rewrite public/sw.js itself —
+  // public/ files are copied verbatim — which is why the id travels via URL.
+  define: {
+    __BUILD_ID__: JSON.stringify(Date.now().toString(36)),
+  },
   server: {
     port: 3000,
     host: true,

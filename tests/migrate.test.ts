@@ -7,10 +7,16 @@
  */
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
+import { readdirSync } from "node:fs";
 import path from "node:path";
 import { neon } from "@neondatabase/serverless";
 
 const siteDir = path.join(import.meta.dirname, "..");
+/* Derived from the migrations dir, not hardcoded (S1.2): the ledger must
+ * contain exactly the files on disk, whatever their current number. */
+const migrationFiles = readdirSync(path.join(siteDir, "db", "migrations"))
+  .filter((f) => f.endsWith(".sql"))
+  .sort();
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL must be set to run migration tests.");
 const db = neon(url);
@@ -28,9 +34,12 @@ describe("D3 — migration runner", () => {
     for (const run of [1, 2]) {
       const res = runMigrate();
       expect(res.status, `run ${run} stderr: ${res.stderr}`).toBe(0);
-      expect(res.stdout).toContain("001_init.sql already applied");
-      expect(res.stdout).toContain("002_s1_1_integrity.sql already applied");
-      expect(res.stdout).toContain("0 applied, 2 already up to date");
+      for (const file of migrationFiles) {
+        expect(res.stdout).toContain(`${file} already applied`);
+      }
+      expect(res.stdout).toContain(
+        `0 applied, ${migrationFiles.length} already up to date`,
+      );
     }
   });
 
@@ -38,9 +47,8 @@ describe("D3 — migration runner", () => {
     const rows = await db.query(
       "SELECT filename, count(*)::int AS n FROM schema_migrations GROUP BY filename ORDER BY filename",
     );
-    expect(rows.map((r) => `${r.filename}:${r.n}`)).toEqual([
-      "001_init.sql:1",
-      "002_s1_1_integrity.sql:1",
-    ]);
+    expect(rows.map((r) => `${r.filename}:${r.n}`)).toEqual(
+      migrationFiles.map((f) => `${f}:1`),
+    );
   });
 });

@@ -24,11 +24,8 @@ const joinWaitlist = createServerFn({ method: "POST" })
     const message = "You're on the list — we'll be in touch when the beta opens.";
     try {
       const db = sql();
-      // Idempotent one-time schema creation — safe to re-run on every call.
-      await db`CREATE TABLE IF NOT EXISTS waitlist (
-        email text PRIMARY KEY,
-        created_at timestamptz NOT NULL DEFAULT now()
-      )`;
+      // Schema lives in db/migrations/003_waitlist.sql (QA defect D17) —
+      // request handlers never run DDL.
       // Dedupe on email so a repeat signup is a no-op, not an error.
       await db`INSERT INTO waitlist (email) VALUES (${data})
         ON CONFLICT (email) DO NOTHING`;

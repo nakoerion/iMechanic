@@ -94,7 +94,11 @@ export function BottomTabBar() {
               to={item.to}
               activeOptions={{ exact: item.exact }}
               className={cn(TAB_BASE, "text-slate-300")}
-              activeProps={{ className: cn(TAB_BASE, "text-brand") }}
+              /* aria-current: active state must not be colour-only (D13). */
+              activeProps={{
+                className: cn(TAB_BASE, "text-brand"),
+                "aria-current": "page",
+              }}
               inactiveProps={{ className: cn(TAB_BASE, "text-slate-300") }}
             >
               {({ isActive }) => (
@@ -133,8 +137,10 @@ function SideRail() {
           to={item.to}
           activeOptions={{ exact: item.exact }}
           className={cn(RAIL_BASE, "text-fg-muted hover:bg-neutral-fill hover:text-fg")}
+          /* aria-current: active state must not be colour-only (D13). */
           activeProps={{
             className: cn(RAIL_BASE, "bg-neutral-fill text-fg"),
+            "aria-current": "page",
           }}
           inactiveProps={{
             className: cn(RAIL_BASE, "text-fg-muted hover:bg-neutral-fill hover:text-fg"),
