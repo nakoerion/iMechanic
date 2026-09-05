@@ -11,11 +11,20 @@
  *    static precached /offline.html is the only fallback.
  *  - Static assets (JS/CSS/img/font) are cache-first with network fill.
  *
- * TODO(S2): the sign-out flow MUST clear this cache — call
- * `caches.delete("imechanic-shell-v1")` (and ideally unregister + re-register)
- * from the sign-out handler so no cached asset state outlives a session.
+ * TODO(S2): the sign-out flow MUST clear this cache — delete every cache
+ * whose name starts with "imechanic-shell-" (and ideally unregister +
+ * re-register) from the sign-out handler so no cached asset state outlives
+ * a session.
  */
-const CACHE = "imechanic-shell-v1";
+
+/* Cache name is versioned per build (QA defect D9). The registrar registers
+ * `/sw.js?v=<build id>` — a new id means a new script URL, so the browser
+ * installs a fresh worker, `activate` fires, and the previous build's cache
+ * is deleted. A literal name here would never be bumped and unhashed assets
+ * (icons, manifest, hero images) would freeze forever on returning devices. */
+const BUILD_ID =
+  new URL(self.location.href).searchParams.get("v") || "unversioned";
+const CACHE = `imechanic-shell-${BUILD_ID}`;
 
 /* Only genuinely static, user-independent files. Never precache an SSR'd
  * route here — at install time it could capture user-specific HTML. */
@@ -31,7 +40,12 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
       .open(CACHE)
-      .then((cache) => cache.addAll(PRECACHE))
+      .then((cache) =>
+        // {cache: "reload"} bypasses the HTTP cache (QA defect D9): the
+        // precache must hold what the server serves NOW, not a possibly
+        // stale copy the browser already had.
+        cache.addAll(PRECACHE.map((url) => new Request(url, { cache: "reload" }))),
+      )
       .then(() => self.skipWaiting()),
   );
 });

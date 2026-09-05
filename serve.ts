@@ -19,6 +19,23 @@ const PORT = 3000;
 const HOST = "0.0.0.0";
 const CLIENT_DIR = `${import.meta.dir}/dist/client`;
 
+/* Cache-Control per path (QA defect D10):
+ *  - /sw.js and the manifest must NEVER be cached: the service worker is the
+ *    escape hatch for unsticking users — if the browser caches it, the escape
+ *    hatch is itself stuck. `no-cache` forces revalidation on every check.
+ *  - Vite-hashed /assets/* are content-addressed, so they are immutable.
+ *  - Everything else (icons, hero images, fonts — stable but not hashed)
+ *    gets a modest hour with revalidation. */
+function cacheControlFor(pathname: string): string {
+  if (pathname === "/sw.js" || pathname === "/manifest.webmanifest") {
+    return "no-cache";
+  }
+  if (pathname.startsWith("/assets/")) {
+    return "public, max-age=31536000, immutable";
+  }
+  return "public, max-age=3600, must-revalidate";
+}
+
 // Free PORT regardless of which user owns the current listener. lsof runs under
 // sudo so it can see (and the kill can signal) a process owned by another user;
 // the loop waits for the socket to actually release before we bind.
@@ -43,7 +60,11 @@ for (let attempt = 1; ; attempt++) {
         const { pathname } = new URL(req.url);
         if (pathname !== "/") {
           const file = Bun.file(CLIENT_DIR + pathname);
-          if (await file.exists()) return new Response(file);
+          if (await file.exists()) {
+            return new Response(file, {
+              headers: { "Cache-Control": cacheControlFor(pathname) },
+            });
+          }
         }
         return (handler as { fetch: (r: Request) => Response | Promise<Response> }).fetch(req);
       },

@@ -36,30 +36,65 @@ export const Route = createRootRoute({
           "AI root-cause diagnosis, an honest severity verdict, a DIY-vs-workshop cost decision, and step-by-step guided repairs. Reading codes and clearing them is free, always.",
       },
       { property: "og:type", content: "website" },
+      /* iOS home-screen installs (QA defect D16): without these an
+         iPhone install opens in Safari chrome instead of standalone.
+         `black-translucent` lets our navy pt-safe header own the
+         status-bar area. `mobile-web-app-capable` is the modern
+         cross-platform equivalent. */
+      { name: "mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
+      { name: "apple-mobile-web-app-title", content: "iMechanic" },
     ],
     links: [
+      /* Inter is self-hosted (QA defect D15) — never link fonts from a
+         Google domain; the @font-face rules live in app.css. */
       { rel: "stylesheet", href: appCss },
       { rel: "manifest", href: "/manifest.webmanifest" },
-      { rel: "apple-touch-icon", href: "/icons/icon-192.png" },
-      { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      {
-        rel: "preconnect",
-        href: "https://fonts.gstatic.com",
-        crossOrigin: "anonymous",
-      },
-      {
-        rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap",
-      },
+      /* Opaque 180x180 — iOS composites transparency onto black (D16). */
+      { rel: "apple-touch-icon", sizes: "180x180", href: "/icons/apple-touch-icon.png" },
       {
         rel: "icon",
         href: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f59e0b' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z'/%3E%3C/svg%3E",
       },
     ],
   }),
-  notFoundComponent: () => <div>Page not found</div>,
+  notFoundComponent: NotFound,
   component: RootComponent,
 });
+
+/** Styled 404 (QA defect D21). Plain statement of fact, a way back in —
+ *  no chrome, so it works for both marketing and app URLs. */
+function NotFound() {
+  return (
+    <main className="flex min-h-dvh flex-col items-center justify-center bg-app-bg px-6 text-center text-fg">
+      <p className="text-xs font-semibold uppercase tracking-wider text-fg-subtle">
+        404
+      </p>
+      <h1 className="mt-2 text-2xl font-extrabold tracking-tight">
+        This page doesn't exist
+      </h1>
+      <p className="mt-3 max-w-sm text-sm leading-relaxed text-fg-muted">
+        The address may be mistyped, or the page may have moved. Nothing you
+        saved is affected.
+      </p>
+      <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+        <a
+          href="/app"
+          className="rounded-control bg-navy-950 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-navy-900"
+        >
+          Open the app
+        </a>
+        <a
+          href="/"
+          className="rounded-control border border-line-strong px-5 py-3 text-sm font-semibold text-fg transition-colors hover:bg-neutral-fill"
+        >
+          Go to the homepage
+        </a>
+      </div>
+    </main>
+  );
+}
 
 function RootComponent() {
   return (
@@ -92,10 +127,16 @@ function ServiceWorkerRegistrar() {
       return;
     }
 
+    /* The build id is stamped into the SW URL (QA defect D9): sw.js derives
+       its cache name from `?v=`, so every deploy re-installs the worker,
+       `activate` fires, and stale caches from previous builds are deleted.
+       Without this the literal cache name froze unhashed assets forever. */
     const register = () => {
-      navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch((err) => {
-        console.warn("[iMechanic] service worker registration failed:", err);
-      });
+      navigator.serviceWorker
+        .register(`/sw.js?v=${__BUILD_ID__}`, { scope: "/" })
+        .catch((err) => {
+          console.warn("[iMechanic] service worker registration failed:", err);
+        });
     };
 
     if (document.readyState === "complete") register();

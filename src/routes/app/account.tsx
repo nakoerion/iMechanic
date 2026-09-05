@@ -35,9 +35,15 @@ function AppAccount() {
       </Card>
 
       <Card>
+        {/* Plain statement of fact (QA defect D14) — this card previously
+            said "Choose your country" above pills that looked selectable
+            but did nothing. Never render a control that looks interactive
+            and isn't; the real selector ships with sign-in (S2). */}
         <h2 className="text-sm font-bold text-fg">Launch markets</h2>
-        <p className="mt-1 text-xs text-fg-subtle">
-          Choose your country so pricing and labour rates match where you live.
+        <p className="mt-1 text-xs leading-relaxed text-fg-subtle">
+          Available at launch: Germany, United Kingdom and Albania. You'll pick
+          your country when accounts arrive — pricing and labour rates then
+          match where you live.
         </p>
         <ul className="mt-3 flex flex-wrap gap-2">
           {MARKET_LIST.map((market) => (
@@ -49,9 +55,6 @@ function AppAccount() {
             </li>
           ))}
         </ul>
-        <p className="mt-3 text-xs text-fg-subtle">
-          Country selection arrives with sign-in.
-        </p>
       </Card>
 
       <section className="flex items-start gap-3 rounded-card border-2 border-ok-border bg-ok-fill p-5">
