@@ -81,14 +81,57 @@ export type AuthUser = {
   country: "DE" | "GB" | "AL" | null;
 };
 
-/** The origin the running site is reachable at (for magic-link URLs). */
+/**
+ * The public origin for magic-link URLs.
+ *
+ * Priority (QA defect D2 — an internal preview host must never reach an email):
+ *  1. PUBLIC_ORIGIN env override, when set (explicit domain, wins over everything).
+ *  2. PUBLIC_SITE_DOMAIN env override — same intent, host-only, from the owning
+ *     environment which sets it. "localhost" is treated as unset.
+ *  3. The incoming request URL *without* x-forwarded-host: the reverse proxy
+ *     masks the Host header, so the real value here is that a ctonew.app host
+ *     (sandbox / published label domains) proves the public host.
+ *  4. Fallback to the two known environment domains — and this is also the
+ *     safety net for the live deployment in case the platform stops passing a
+ *     usable host.
+ * Deliberately NEVER used: getRequestUrl x-forwarded-host, which the platform
+ * sets to an internal `*.preview.bl.run` sandbox host that must not appear in
+ * any email.
+ */
+function publicOriginFallbacks(): string[] {
+  return [
+    "https://6e1923cb2eb061d84c9c1a0cc9cbfefb-dev.ctonew.app",
+    "https://6e1923cb2eb061d84c9c1a0cc9cbfefb.ctonew.app",
+  ];
+}
+
 function siteOrigin(): string {
-  try {
-    return getRequestUrl({ xForwardedHost: true, xForwardedProto: true })
-      .origin;
-  } catch {
-    return "";
+  const override = process.env.PUBLIC_ORIGIN?.trim().replace(/\/+$/, "");
+  if (override) return override.startsWith("http") ? override : `https://${override}`;
+
+  const domain = process.env.PUBLIC_SITE_DOMAIN?.trim().replace(/\/+$/, "");
+  if (domain && domain !== "localhost" && !domain.includes(":")) {
+    return `https://${domain}`;
   }
+
+  if (publicOriginFallbacks().some((fb) => fb.includes("ctonew.app"))) {
+    try {
+      // No x-forwarded-host: only the true proxy-facing host survives, so a
+      // public ctonew.app host is authoritative. Internal `*.preview.bl.run`
+      // hosts never pass this filter.
+      const url = getRequestUrl({ xForwardedHost: false }).origin;
+      if (
+        /^https:\/\/([a-z0-9-]+\.)?ctonew\.app$/.test(url) ||
+        url.includes("ctonew.app")
+      ) {
+        return url;
+      }
+    } catch {
+      /* fall through to the known-good list below */
+    }
+  }
+
+  return publicOriginFallbacks()[0];
 }
 
 function buildMagicLinkEmail(link: string): string {
@@ -178,9 +221,9 @@ export async function requestMagicLinkCore(
 
   const token = generateToken();
   const tokenHash = hashToken(token);
-  // The verify surface is the /app/signin/verify route (it is exempt from the
-  // /app route guard via the `/app/signin` prefix check in app/route.tsx).
-  const link = `${siteOrigin()}/app/signin/verify?token=${encodeURIComponent(token)}`;
+  // The verify surface is the /app/verify route (it is exempt from the /app
+  // route guard alongside /app/signin — see app/route.tsx).
+  const link = `${siteOrigin()}/app/verify?token=${encodeURIComponent(token)}`;
 
   await db`
     INSERT INTO login_tokens (token_hash, email, expires_at)

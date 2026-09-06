@@ -31,6 +31,15 @@ export const themeInitScript = `(function(){try{var k=${JSON.stringify(
   THEME_STORAGE_KEY,
 )};var c=localStorage.getItem(k);if(c!=="light"&&c!=="dark"&&c!=="system"){c="system";}var d=c==="dark"||(c==="system"&&window.matchMedia("(prefers-color-scheme: dark)").matches);var e=document.documentElement;e.classList.toggle("dark",d);e.dataset.theme=c;}catch(_){}})();`;
 
+/**
+ * SSR-safe alias: scripts cannot set data attributes (React would not see
+ * them) and the blocking inline script already applies the theme to
+ * <html> before first paint — so React always SSR-renders the element
+ * WITHOUT the attribute, and the script + useTheme (client) keep it in
+ * sync. Never render `data-theme` from React.
+ */
+export const themeDataAttrs = { "data-theme": undefined } as const;
+
 function systemPrefersDark(): boolean {
   if (typeof window === "undefined" || !window.matchMedia) return false;
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
