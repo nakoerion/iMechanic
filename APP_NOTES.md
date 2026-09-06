@@ -76,10 +76,8 @@ re-fetch the files with a wider range.
 
 ## Slice status
 
-- **S1 app shell + schema — done.** Finished by the lead: manifest/apple-touch
-  links, service-worker registration, landing→`/app` entry point.
-- Next: designer implements the design-token system and core shell components,
-  then S2 (auth).
+- S1 done (app shell + schema). S1.1 done (schema integrity). S1.2 merged (pre-publish fixes). S1b done (design system). **S2 auth done — merged (PR #4) and PUBLISHED to live** (2026-09-06).
+- Next: S3 (OBD2 layer).
 
 ## Decisions already made (do not relitigate)
 
@@ -95,12 +93,11 @@ re-fetch the files with a wider range.
 - Clearing codes is free forever and must never carry a lock, a Pro badge, or a
   dimmed state.
 
-## Slice status
-- S1 done, S1.1 done, S1.2 merged, S1b done, **S2 auth implemented on branch s2-auth (not yet QA'd/published)**.
 ## S2 auth notes
 - Server: `src/server/email.ts` (Resend; dev fallback logs full magic-link URL; throws in prod without RESEND_API_KEY), `src/server/auth-core.ts` (impl: node:crypto + cookie helpers), `src/server/auth.ts` (createServerFn RPC stubs, **dynamically import auth-core so node:crypto never hits the client bundle — keep this pattern**), `src/server/email-validate.ts` (pure, client-safe).
-- Routes: `/app/signin` (form → honest check-your-email), `/app/signin/verify` (`?token=`), `/app/account` (email, country DE/GB/AL via updateCountry, sign-out via `src/lib/session.ts` which wipes `imechanic-shell-*` caches + unregisters SW then deletes session — resolves TODO(S2) in sw.js). `/app/*` guarded in `app/route.tsx` beforeLoad via getCurrentUser; `/app/signin*` exempt; `/` public.
+- Routes: `/app/signin` (form → honest check-your-email), `/app/verify` (`?token=` — FLAT route, NOT a child of /app/signin), `/app/account` (email, country DE/GB/AL via updateCountry, sign-out via `src/lib/session.ts` which wipes `imechanic-shell-*` caches + unregisters SW then deletes session — resolves TODO(S2) in sw.js). `/app/*` guarded in `app/route.tsx` beforeLoad via getCurrentUser; `/app/signin` and `/app/verify` prefixes exempt; `/` public.
+- Magic-link origin: `siteOrigin()` in auth-core.ts resolves PUBLIC_ORIGIN env → PUBLIC_SITE_DOMAIN env → request URL (no x-forwarded-host, filtered to public `ctonew.app` host) → hardcoded public-domain fallback. Never reads x-forwarded-host (the proxy masks it to an internal `*.preview.bl.run` host).
 - Security: raw tokens only in the emailed URL; DB stores SHA-256. Verify is `UPDATE ... WHERE used_at IS NULL` with rowCount decision. Cookie `imechanic.session` HttpOnly+Secure+Lax, 30d. Request is idempotent (valid unused token or <60s-old mint → no re-send).
-- Email: from `iMechanic <login@imechanic.app>`, subject "Your iMechanic sign-in link", link `${origin}/verify?token=…` via getRequestUrl.
+- Email: from `iMechanic <login@imechanic.app>`, subject "Your iMechanic sign-in link", link `${siteOrigin()}/app/verify?token=…`.
 - Tests: `tests/auth.test.ts` (token hash round-trip, uniqueness, constant-time, email normalisation). Build + 19 tests green. No schema change (migrate re-runs clean).
-- **Not yet done (QA/delegation): real-browser flow 390×844 + desktop, zero console errors; Neon side-effect verification + row cleanup; publish is lead-only.**
+- **S2 QA re-verification PASSED** (full flow both viewports, zero console errors, public origin, DB cleaned) and published to live.
