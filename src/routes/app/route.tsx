@@ -1,5 +1,10 @@
-import { Outlet, createFileRoute } from "@tanstack/react-router";
+import {
+  Outlet,
+  createFileRoute,
+  redirect,
+} from "@tanstack/react-router";
 import { AppShell, ScreenContainer } from "../../components/app-shell";
+import { getCurrentUser } from "../../server/auth";
 
 export const Route = createFileRoute("/app")({
   /* noindex until scanning ships in S3 (QA defect D26): every /app screen
@@ -8,6 +13,14 @@ export const Route = createFileRoute("/app")({
   head: () => ({
     meta: [{ name: "robots", content: "noindex" }],
   }),
+  beforeLoad: async ({ location }) => {
+    // Route protection (Slice S2): the whole /app tree requires a session —
+    // except the two public auth surfaces under /app/signin, which are the
+    // way IN. Authenticated SSR and client navigations both run this.
+    if (location.pathname.startsWith("/app/signin")) return;
+    const user = await getCurrentUser();
+    if (!user) throw redirect({ to: "/app/signin" });
+  },
   component: AppLayout,
 });
 
