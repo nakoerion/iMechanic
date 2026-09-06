@@ -178,7 +178,9 @@ export async function requestMagicLinkCore(
 
   const token = generateToken();
   const tokenHash = hashToken(token);
-  const link = `${siteOrigin()}/verify?token=${encodeURIComponent(token)}`;
+  // The verify surface is the /app/signin/verify route (it is exempt from the
+  // /app route guard via the `/app/signin` prefix check in app/route.tsx).
+  const link = `${siteOrigin()}/app/signin/verify?token=${encodeURIComponent(token)}`;
 
   await db`
     INSERT INTO login_tokens (token_hash, email, expires_at)
