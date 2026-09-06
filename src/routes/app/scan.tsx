@@ -137,7 +137,11 @@ function AppScan() {
   async function onDemoScan() {
     setPhase({ kind: "working", label: t.demoRunning });
     try {
-      demoDriver.reset();
+      // NOTE: no demoDriver.reset() here. A cleared demo adapter must READ
+      // EMPTY on the next demo scan — that is the re-scan-verify flow QA
+      // checks ("clear codes, then re-scan → honest empty state"). reset()
+      // is only used by tests and by the S5 verify flow when the demo car's
+      // faults are deliberately restored.
       await demoDriver.connect();
       const result = await demoDriver.readCodes();
       const ok = await persistScan("demo", result);
@@ -273,11 +277,15 @@ function AppScan() {
           clearError={clearError}
           onClear={() => void onClear()}
           onNewScan={() => {
+            // QA: "Start a new scan" must return to the fresh entry form.
+            // Simply re-reading latest() would re-fetch the SAME just-saved
+            // scan and keep the result view stuck — dropping the last result
+            // is what "new scan" means here (the result stays in history).
             setJustScannedId(null);
             setCleared(false);
             setClearError(null);
             setPhase({ kind: "idle" });
-            void refreshLastScan();
+            setLastScan(null);
           }}
         />
       ) : (
@@ -296,6 +304,35 @@ function AppScan() {
             attachError={attachError}
             onAttach={() => void onAttachVehicle()}
           />
+
+          {/* Demo — the primary free onboarding path. Placed BEFORE the live
+              adapter card so "Run demo scan" sits fully above the bottom tab
+              bar at initial scroll: QA found that with it at the page bottom
+              its centre landed under the fixed tab bar at 390×844 and taps
+              misrouted to the Vehicle tab. Demo must be immediately tappable. */}
+          <Card>
+            <h2 className="flex items-center gap-2 text-sm font-bold text-fg">
+              <ScanIcon className="h-4 w-4 text-brand-strong" />
+              {t.demoHeading}
+            </h2>
+            <p className="mt-1 text-xs leading-relaxed text-fg-subtle">
+              {t.demoDescription}
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-fg-subtle">
+              {t.demoDatasetNote}
+            </p>
+            <Button
+              className="mt-3"
+              fullWidth
+              loading={
+                phase.kind === "working" && phase.label === t.demoRunning
+              }
+              loadingLabel={t.demoRunning}
+              onClick={() => void onDemoScan()}
+            >
+              {t.demoButton}
+            </Button>
+          </Card>
 
           {/* Live adapter */}
           <Card>
@@ -342,31 +379,6 @@ function AppScan() {
                 )}
               </div>
             )}
-          </Card>
-
-          {/* Demo */}
-          <Card>
-            <h2 className="flex items-center gap-2 text-sm font-bold text-fg">
-              <ScanIcon className="h-4 w-4 text-brand-strong" />
-              {t.demoHeading}
-            </h2>
-            <p className="mt-1 text-xs leading-relaxed text-fg-subtle">
-              {t.demoDescription}
-            </p>
-            <p className="mt-1 text-xs leading-relaxed text-fg-subtle">
-              {t.demoDatasetNote}
-            </p>
-            <Button
-              className="mt-3"
-              fullWidth
-              loading={
-                phase.kind === "working" && phase.label === t.demoRunning
-              }
-              loadingLabel={t.demoRunning}
-              onClick={() => void onDemoScan()}
-            >
-              {t.demoButton}
-            </Button>
           </Card>
 
           {/* Manual */}
