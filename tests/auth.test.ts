@@ -42,7 +42,11 @@ describe("tokensEqual", () => {
     const token = generateToken();
     expect(tokensEqual(token, token)).toBe(true);
     expect(tokensEqual(token, generateToken())).toBe(false);
-    expect(tokensEqual(token, token.slice(0, -1) + "0")).toBe(false);
+    // Force the last hex char to a *guaranteed different* value — if the
+    // token already ends in "0", `slice + "0"` would be identical and the
+    // assertion would flakily fail (this was the 1-in-16 red test).
+    const flipped = token.slice(0, -1) + (token.endsWith("0") ? "1" : "0");
+    expect(tokensEqual(token, flipped)).toBe(false);
   });
 });
 
