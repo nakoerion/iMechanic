@@ -11,10 +11,10 @@
  *    static precached /offline.html is the only fallback.
  *  - Static assets (JS/CSS/img/font) are cache-first with network fill.
  *
- * TODO(S2): the sign-out flow MUST clear this cache — delete every cache
- * whose name starts with "imechanic-shell-" (and ideally unregister +
- * re-register) from the sign-out handler so no cached asset state outlives
- * a session.
+ * S2: the sign-out flow clears this cache client-side — the account screen
+ * deletes every cache whose name starts with "imechanic-shell-" and
+ * unregisters the worker (src/lib/session.ts, `clientSignOutAndClearCache`),
+ * so no cached asset state outlives a session.
  */
 
 /* Cache name is versioned per build (QA defect D9). The registrar registers
