@@ -41,7 +41,7 @@ type BluetoothDeviceLike = {
           ): void;
         }>;
       }>;
-    } | null;
+    } | null>;
   };
 };
 
