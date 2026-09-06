@@ -101,3 +101,19 @@ re-fetch the files with a wider range.
 - Email: from `iMechanic <login@imechanic.app>`, subject "Your iMechanic sign-in link", link `${siteOrigin()}/app/verify?token=…`.
 - Tests: `tests/auth.test.ts` (token hash round-trip, uniqueness, constant-time, email normalisation). Build + 19 tests green. No schema change (migrate re-runs clean).
 - **S2 QA re-verification PASSED** (full flow both viewports, zero console errors, public origin, DB cleaned) and published to live.
+
+## S3 QA follow-up (engineer, branch s3-obd2, commit 026eb39)
+
+### Issue 1 — mobile tap misroute on "Run demo scan" — REAL defect, FIXED
+Reproduced on a clean PRODUCTION build (no HMR) at 390x844: the fixed bottom tab bar (z-40, ~y787-844) overlapped the demo CTA, whose visible sliver at initial scroll sat fully inside the tab bar's hit region (elementFromPoint at its centre returned the "Vehicle" tab link). Tool-clicking the visible sliver navigated to /app/vehicles — exactly QA's report. Desktop 1280x900 unaffected (tab bar is lg:hidden).
+
+Fix: moved the Demo card ABOVE the live-adapter card so "Run demo scan" sits at y631-679 (above the bar), plus section scroll-margin-bottom 6rem and html scroll-padding-bottom 6rem so no scroll/focus target ever rests under the fixed bar. Verified on clean build at 390x844: click now runs the demo scan and stays on /app/scan ("Codes read" + "Clear codes"), zero console errors.
+
+### Issue 2 — "Start a new scan" non-responsive — REAL defect, FIXED
+The handler re-fetched the latest scan after dropping local state, so the just-saved scan re-rendered the result view forever. onNewScan now nulls lastScan (result stays in history). Verified on clean build: returns to fresh entry form (vehicle picker + demo + connect + manual). Zero console errors.
+
+### Flows
+3) Manual scan: P0420 via native fill + Save -> "Manual entry — typed in by you", "Saved to your history", P0420 status "Stored". Confirmed in Neon: scans row source='manual' with scan_codes P0420. (Invalid XYZ test could not complete within session budget; validation path is covered by existing obd tests, 20 pass.)
+4) Clear codes -> re-scan: "Clear request sent. Re-scan to confirm the codes are gone." note renders; re-scan shows "No fault codes found. The car reports a clean bill of health."; no crash. Root cause of prior behaviour: onDemoScan called demoDriver.reset(), which restored the dataset after clear — removed (clear must persist so re-scan verifies empty; reset stays in tests/S5).
+
+DB cleanup: 2 test users, 4 scans (demo×3 incl. cleared, manual×1), 9 scan_codes, 2 sessions deleted (cascade); BEFORE u2/sc4/cc9/ss2/vv0 -> AFTER all 0.
