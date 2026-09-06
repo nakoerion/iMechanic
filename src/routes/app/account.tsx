@@ -5,7 +5,7 @@ import { CheckIcon } from "../../components/icons";
 import { Button } from "../../components/ui/button";
 import { ThemeControl } from "../../components/ui/theme-control";
 import { APP_COPY } from "../../lib/copy";
-import { MARKETS, type CountryCode } from "../../lib/market";
+import { MARKET_LIST, type CountryCode } from "../../lib/market";
 import { clientSignOutAndClearCache } from "../../lib/session";
 import {
   getCurrentUser,

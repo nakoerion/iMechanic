@@ -15,9 +15,14 @@ export const Route = createFileRoute("/app")({
   }),
   beforeLoad: async ({ location }) => {
     // Route protection (Slice S2): the whole /app tree requires a session —
-    // except the two public auth surfaces under /app/signin, which are the
-    // way IN. Authenticated SSR and client navigations both run this.
-    if (location.pathname.startsWith("/app/signin")) return;
+    // except the two public auth surfaces /app/signin and /app/verify, which
+    // are the way IN. Authenticated SSR and client navigations both run this.
+    if (
+      location.pathname.startsWith("/app/signin") ||
+      location.pathname.startsWith("/app/verify")
+    ) {
+      return;
+    }
     const user = await getCurrentUser();
     if (!user) throw redirect({ to: "/app/signin" });
   },

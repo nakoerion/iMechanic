@@ -1,11 +1,14 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ScreenHeader } from "../../../components/app-shell";
-import { Button } from "../../../components/ui/button";
-import { APP_COPY } from "../../../lib/copy";
-import { verifyMagicLink } from "../../../server/auth";
+import { ScreenHeader } from "../../components/app-shell";
+import { Button } from "../../components/ui/button";
+import { APP_COPY } from "../../lib/copy";
+import { verifyMagicLink } from "../../server/auth";
 
-export const Route = createFileRoute("/app/signin/verify")({
+export const Route = createFileRoute("/app/verify")({
+  validateSearch: (search) => ({
+    token: typeof search.token === "string" ? search.token : undefined,
+  }),
   component: SignInVerifyPage,
 });
 
@@ -15,7 +18,10 @@ function SignInVerifyPage() {
 
   useEffect(() => {
     let cancelled = false;
-    if (!token) {
+    // Same guard as the server validator: a truncated/absent token can never
+    // succeed, so surface the honest error immediately instead of failing
+    // quietly after a round-trip.
+    if (!token || token.length < 32) {
       setState("error");
       return;
     }

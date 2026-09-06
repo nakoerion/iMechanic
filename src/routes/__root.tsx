@@ -1,7 +1,7 @@
 import { HeadContent, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
 import { useEffect } from "react";
 import type { ReactNode } from "react";
-import { themeInitScript } from "~/lib/theme";
+import { themeInitScript, themeDataAttrs } from "~/lib/theme";
 import appCss from "~/styles/app.css?url";
 
 export const Route = createRootRoute({
@@ -151,7 +151,11 @@ function ServiceWorkerRegistrar() {
 
 function RootDocument({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    // suppressHydrationWarning (QA defect D3): the blocking theme script
+    // above mutates <html> (data-theme + dark class) before React hydrates,
+    // so SSR and first client render intentionally differ on this element.
+    // React must not diff it.
+    <html lang="en" suppressHydrationWarning {...themeDataAttrs}>
       <head>
         {/* Applies the stored theme before first paint — no flash of the
             wrong theme when someone opens the app at night. Must stay inline
