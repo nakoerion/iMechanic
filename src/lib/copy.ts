@@ -33,10 +33,13 @@ export const APP_COPY = {
       permanent: "Permanent",
     },
     freeNote: "Reading this code and clearing it is free.",
-    /* Shown while the S4 catalog seed is still empty — never invent a
-     * definition for a code we have not seeded. */
-    meaningPendingNote:
-      "The plain-English meaning for this code arrives in a future update. Your code is saved and stays free to read.",
+    /* Shown for codes missing from the seeded catalog — the code text is
+     * never invented, only the lookup is missing. */
+    notInCatalogNote:
+      "Not in our catalog yet — we have not looked this one up, so no meaning is shown rather than a guessed one. Your code is saved and stays free to read.",
+    diagnosisReasonsLabel: "Why this verdict",
+    verdictMismatchNote:
+      "Saved before the verdict layer shipped — re-scan to get a verdict.",
   },
   verdict: {
     heading: "Severity verdict",
@@ -94,7 +97,7 @@ export const APP_COPY = {
     manualDescription:
       "Already read the code elsewhere? Type it in and it becomes a scan with one stored code.",
     manualLabelInput: "Fault code",
-    manualHint: "For example P0420 — one letter P, C, B or U plus four characters.",
+    manualHint: "For example P0420 — one letter P, C, B or U plus four characters. Several codes at once works too: separate them with spaces or commas.",
     manualButton: "Save as scan",
     manualSaving: "Saving…",
     manualInvalid: "That doesn't look like a fault code — check it and try again.",

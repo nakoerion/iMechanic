@@ -12,6 +12,14 @@
  */
 
 import { sql } from "../db";
+import {
+  diagnose,
+  rootCauseFor,
+  RULES_CONFIDENCE,
+  type CatalogEntry,
+  type PerCodeSeverity,
+  type Verdict,
+} from "../lib/diagnosis";
 import { isDtcStatus, normaliseDtc } from "../lib/dtc";
 
 const db = sql();
@@ -25,6 +33,26 @@ export type PersistedCode = {
   createdAt: string;
 };
 
+/** One fault code with its catalog meaning + display severity attached. */
+export type PersistedCodeDetail = PersistedCode & {
+  title: string | null;
+  genericCause: string | null;
+  system: string | null;
+  /** Display-only severity (from catalog hint / family judgment). */
+  severity: Verdict;
+  known: boolean;
+};
+
+/** The rules-engine verdict written for the scan (diagnoses row). */
+export type PersistedDiagnosis = {
+  id: string;
+  verdict: Verdict;
+  summary: string;
+  reasons: string[];
+  source: "rules";
+  confidence: number;
+};
+
 export type PersistedScan = {
   id: string;
   source: ScanSource;
@@ -33,6 +61,10 @@ export type PersistedScan = {
   createdAt: string;
   codes: PersistedCode[];
   catalogTitles: Record<string, string>;
+  /** Full per-code catalog detail for the free fault-code cards. */
+  codeDetails: PersistedCodeDetail[];
+  /** The free rules-engine verdict — always present (every scan writes one). */
+  diagnosis: PersistedDiagnosis | null;
 };
 
 function isScanSource(value: unknown): value is ScanSource {
@@ -72,22 +104,90 @@ function toPersistedScan(
     status: string;
     created_at: unknown;
   }[],
-  catalogRows: { code: string; title: string }[],
+  catalogRows: {
+    code: string;
+    title: string | null;
+    system: string | null;
+    generic_cause: string | null;
+    severity_default: string | null;
+  }[],
+  diagnosisRow: {
+    id: string;
+    verdict: string;
+    reasoning: string | null;
+    confidence: number | null;
+  } | null,
 ): PersistedScan {
   const raw = (scanRow.raw_json ?? {}) as { vin?: unknown };
+  const codes: PersistedCode[] = codeRows.map((c) => ({
+    id: c.id,
+    code: c.code,
+    status: isDtcStatus(c.status) ? c.status : "stored",
+    createdAt: String(c.created_at),
+  }));
+  // The rules engine runs over the same codes + catalog metadata the row
+  // was written with, so the client renders the verdict without a refetch.
+  const catalogMap = new Map<string, CatalogEntry>(
+    catalogRows.map((c) => [
+      c.code,
+      {
+        code: c.code,
+        title: c.title,
+        system: c.system,
+        generic_cause: c.generic_cause,
+        severity_default: c.severity_default,
+      },
+    ]),
+  );
+  const engine = diagnose({
+    codes: codes.map((c) => ({ code: c.code, status: c.status })),
+    catalog: catalogMap,
+  });
+  const byCode = new Map<string, PerCodeSeverity>(
+    engine.perCode.map((p) => [p.code, p]),
+  );
+  const codeDetails: PersistedCodeDetail[] = codes.map((c) => {
+    const p = byCode.get(c.code);
+    return {
+      ...c,
+      title: p?.title ?? null,
+      genericCause: p?.genericCause ?? null,
+      system: p?.system ?? null,
+      severity: p?.severity ?? "repair_soon",
+      known: p?.known ?? false,
+    };
+  });
+  const reasons =
+    diagnosisRow?.reasoning && diagnosisRow.reasoning.length > 0
+      ? diagnosisRow.reasoning.split("\n")
+      : engine.reasons;
+  const verdict: Verdict =
+    diagnosisRow?.verdict === "drive_on" ||
+    diagnosisRow?.verdict === "repair_soon" ||
+    diagnosisRow?.verdict === "stop_driving"
+      ? diagnosisRow.verdict
+      : engine.verdict;
   return {
     id: scanRow.id,
     source: isScanSource(scanRow.source) ? scanRow.source : "live",
     vehicleId: scanRow.vehicle_id,
     vin: typeof raw.vin === "string" ? raw.vin : null,
     createdAt: String(scanRow.created_at),
-    codes: codeRows.map((c) => ({
-      id: c.id,
-      code: c.code,
-      status: isDtcStatus(c.status) ? c.status : "stored",
-      createdAt: String(c.created_at),
-    })),
-    catalogTitles: Object.fromEntries(catalogRows.map((c) => [c.code, c.title])),
+    codes,
+    catalogTitles: Object.fromEntries(
+      catalogRows.filter((c) => c.title).map((c) => [c.code, c.title as string]),
+    ),
+    codeDetails,
+    diagnosis: diagnosisRow
+      ? {
+          id: diagnosisRow.id,
+          verdict,
+          summary: engine.summary,
+          reasons,
+          source: "rules",
+          confidence: diagnosisRow.confidence ?? RULES_CONFIDENCE,
+        }
+      : null,
   };
 }
 
@@ -120,10 +220,26 @@ async function loadScanForUser(
   const catalog =
     codes.length === 0
       ? []
-      : await db<{ code: string; title: string }[]>`
-        SELECT code, title FROM dtc_catalog
+      : await db<{
+          code: string;
+          title: string | null;
+          system: string | null;
+          generic_cause: string | null;
+          severity_default: string | null;
+        }[]>`
+        SELECT code, title, system, generic_cause, severity_default FROM dtc_catalog
         WHERE code IN (SELECT DISTINCT UNNEST(${codes.map((c) => c.code)}::text[]))`;
-  return toPersistedScan(scan, codes, catalog);
+  const diagnoses = await db<{
+    id: string;
+    verdict: string;
+    reasoning: string | null;
+    confidence: number | null;
+  }[]>`
+    SELECT id, verdict, reasoning, confidence FROM diagnoses
+    WHERE scan_id = ${scan.id} AND user_id = ${userId}
+    ORDER BY created_at DESC
+    LIMIT 1`;
+  return toPersistedScan(scan, codes, catalog, diagnoses[0] ?? null);
 }
 
 /** Vehicles belonging to the caller — for the scan screen's attach picker. */
@@ -173,9 +289,11 @@ export async function createVehicleCore(
 }
 
 /**
- * Persist a scan + its codes. The catalog is empty until S4 seeds it, so
- * titles are looked up but not invented — unknown codes come back with no
- * title and the UI says the meaning arrives in a future update.
+ * Persist a scan + its codes + its rules-engine diagnosis. The diagnosis row
+ * is written on EVERY scan path (manual, demo, live): the rules verdict is
+ * free forever and the result view renders it from the same response, no
+ * second fetch. Unknown codes are stored without invention; the engine says
+ * "not in our catalog" for them.
  */
 export async function saveScanCore(
   userId: string,
@@ -219,6 +337,38 @@ export async function saveScanCore(
       INSERT INTO scan_codes (scan_id, user_id, code, status)
       VALUES (${scanId}, ${userId}, ${c.code}, ${c.status})`;
   }
+  // Rules-engine verdict: every scan writes exactly one diagnoses row
+  // (source='rules', explicit verdict, fixed confidence). The catalog
+  // metadata the engine sees is read back from dtc_catalog so the row
+  // always matches what the result view renders.
+  const catalogRows = await db<{
+    code: string;
+    title: string | null;
+    system: string | null;
+    generic_cause: string | null;
+    severity_default: string | null;
+  }>`
+    SELECT code, title, system, generic_cause, severity_default FROM dtc_catalog
+    WHERE code = ANY(${codes.map((c) => c.code)})`;
+  const catalogMap = new Map<string, CatalogEntry>(
+    catalogRows.map((c) => [
+      c.code,
+      {
+        code: c.code,
+        title: c.title,
+        system: c.system,
+        generic_cause: c.generic_cause,
+        severity_default: c.severity_default,
+      },
+    ]),
+  );
+  const engine = diagnose({
+    codes: codes.map((c) => ({ code: c.code, status: c.status })),
+    catalog: catalogMap,
+  });
+  await db`
+    INSERT INTO diagnoses (scan_id, user_id, verdict, root_cause, confidence, reasoning, source)
+    VALUES (${scanId}, ${userId}, ${engine.verdict}, ${rootCauseFor(engine)}, ${RULES_CONFIDENCE}, ${engine.reasons.join("\n")}, 'rules')`;
   const saved = await loadScanForUser(userId, scanId);
   if (!saved) throw new Error("The scan was saved but could not be re-read.");
   return saved;

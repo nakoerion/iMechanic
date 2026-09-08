@@ -102,6 +102,59 @@ re-fetch the files with a wider range.
 - Tests: `tests/auth.test.ts` (token hash round-trip, uniqueness, constant-time, email normalisation). Build + 19 tests green. No schema change (migrate re-runs clean).
 - **S2 QA re-verification PASSED** (full flow both viewports, zero console errors, public origin, DB cleaned) and published to live.
 
+## S3 merge-gate R1 (engineer, branch s3-obd2) — severity verdict + catalog
+
+Implements review section R1 of `/home/team/shared/REVIEW-S3.md` (owner-endorsed).
+R2/R3/R4 and F1–F8 are NOT touched — separate delegations.
+
+- **Migration `db/migrations/004_dtc_catalog_seed.sql`** — 51-row launch set
+  of common generic P-codes, idempotent `INSERT ... ON CONFLICT (code)
+  DO NOTHING`. Header comment: generic guidance, not manufacturer-specific
+  repair advice. `severity_default` ∈ drive_on (13: catalyst/EVAP/thermostat)
+  | repair_soon (38: misfire/lean-rich/O2/MAF/EGR/voltage/throttle/idle/
+  knock/crank/cam) — NOTHING seeds as stop_driving, and the hint is
+  display-only (the engine never overrides on it). Verified 51 rows live.
+- **Rules engine `src/lib/diagnosis.ts`** (pure, client-safe) —
+  first-match-wins ladder over the scan's codes + catalog metadata:
+  stop (sensor coolant ≥ 115 °C — INERT; sensor voltage < 12 V @ RPM > 400 —
+  INERT; STORED misfire P0300–P0308 + STORED P0420/P0430 — fires) →
+  repair_soon (stored misfire alone; stored lean/rich, O2, MAF, EGR,
+  voltage, throttle/idle, knock/crank/cam families) → drive_on (every
+  stored code catalyst/EVAP/thermostat, or empty scan) → default
+  repair_soon (unknown codes with honest "not in our catalog" reason,
+  stored or not; pending-only). Output: verdict + summary + reasons +
+  per-code display severity. Confidence fixed 70 (`RULES_CONFIDENCE`).
+- **Scope decision 1 — sensor rules inert.** S3 reads fault codes only
+  (modes 03/07/0A), no live PIDs, so the coolant/voltage rules live in the
+  module as a marked INERT layer (`SENSOR_RULES`, tested as not fireable
+  from code-only data). A later PID-reading slice passes real sensor data.
+- **Scope decision 2 — demo dataset lands on repair_soon.**
+  `demo-simulator.ts`: P0420 stored + P0171 stored + P0301 pending + P0442
+  permanent. The safety rule (stored misfire + stored catalyst →
+  stop_driving) is kept; the stored misfire is now pending + a stored
+  lean code drives the repair_soon. obd.test updated (mode-03 pair).
+- **Diagnosis-row wiring** — `saveScanCore` runs the engine after
+  scan+codes insert and writes ONE `diagnoses` row (scan_id, user_id,
+  explicit verdict, source='rules', confidence 70, reasoning=reasons
+  joined, root_cause=highest-priority generic_cause or honest fallback)
+  for manual, demo AND live. `PersistedScan` gains `codeDetails`
+  (per-code title/cause/system/display severity/known) +
+  `diagnosis` (verdict/summary/reasons/source/confidence); mirrored in
+  `scans.ts` RPC types. Dynamic-import bundle boundary kept.
+- **UI `app/scan.tsx` (`ScanResult`)** — free `VerdictPanel`
+  (severity/summary/source="rules"/codeCount) ABOVE the codes list + free
+  reasons block under it; per-code `FaultCodeCard` (title, generic_cause,
+  system, severity, status) replacing the "meaning arrives in a future
+  update" note; unknown codes get the honest "not in our catalog yet"
+  fallback. No lock/badge/blur/dim anywhere. Manual entry accepts
+  several codes at once (space/comma separated) for the P0301+P0420 pair.
+- **Tests `tests/diagnosis.test.ts`** — 10 pure unit tests, no DB
+  (ordering, escalation ×2, misfire-alone, families, drive_on families,
+  empty-vs-pending, unknown honesty, display-only, sensor-inert).
+  Full suite: 49/49 green. `bun run build` clean.
+- **Contract in repo** — `docs/APP_SPEC.md` is a copy of the shared
+  `APP_SPEC.md` (shared copy kept in place).
+
 ## S3 QA follow-up (engineer, branch s3-obd2, commit 026eb39)
 
 ### Issue 1 — mobile tap misroute on "Run demo scan" — REAL defect, FIXED

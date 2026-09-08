@@ -23,6 +23,23 @@ export type PersistedCode = {
   createdAt: string;
 };
 
+export type PersistedCodeDetail = PersistedCode & {
+  title: string | null;
+  genericCause: string | null;
+  system: string | null;
+  severity: "drive_on" | "repair_soon" | "stop_driving";
+  known: boolean;
+};
+
+export type PersistedDiagnosis = {
+  id: string;
+  verdict: "drive_on" | "repair_soon" | "stop_driving";
+  summary: string;
+  reasons: string[];
+  source: "rules";
+  confidence: number;
+};
+
 export type PersistedScan = {
   id: string;
   source: ScanSource;
@@ -31,6 +48,8 @@ export type PersistedScan = {
   createdAt: string;
   codes: PersistedCode[];
   catalogTitles: Record<string, string>;
+  codeDetails: PersistedCodeDetail[];
+  diagnosis: PersistedDiagnosis | null;
 };
 
 export type VehicleOption = {

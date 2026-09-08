@@ -27,12 +27,19 @@ type DemoRow = { code: string; status: DtcStatus };
  * The demo car: a mid-2010s petrol hatchback with a tired catalyst, a recent
  * misfire, and one pending EVAP code — realistic enough to exercise the UI,
  * small enough to read at a glance. Statuses cover all three scan-code kinds.
+ *
+ * SCOPE DECISION (lead, 2026-09-08 — do not relitigate): the safety rule
+ * "stored misfire + stored catalyst → stop_driving" stays, so the demo
+ * dataset must NOT pair a stored misfire with a stored catalyst — the first
+ * demo tap must land on repair_soon, not stop_driving. The misfire is
+ * therefore pending (unconfirmed): the engine treats it as repair_soon via
+ * the stored lean-family code P0171. Statuses still cover all three kinds.
  */
 export const DEMO_DATASET: readonly DemoRow[] = [
   { code: "P0420", status: "stored" },
-  { code: "P0301", status: "stored" },
-  { code: "P0442", status: "pending" },
-  { code: "P0420", status: "permanent" },
+  { code: "P0171", status: "stored" },
+  { code: "P0301", status: "pending" },
+  { code: "P0442", status: "permanent" },
 ] as const;
 
 /** Hex-dump the dataset the way a real adapter would send it (for tests). */

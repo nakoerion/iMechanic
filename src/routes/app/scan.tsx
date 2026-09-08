@@ -8,9 +8,12 @@ import {
   PlugIcon,
   ScanIcon,
 } from "../../components/icons";
+import { FaultCodeCard } from "../../components/severity/fault-code-card";
+import { VerdictPanel } from "../../components/severity/verdict-panel";
 import { Button } from "../../components/ui/button";
 import { APP_COPY } from "../../lib/copy";
 import { normaliseDtc } from "../../lib/dtc";
+import type { Severity } from "../../lib/severity";
 import { DemoDriver } from "../../obd/demo-simulator";
 import { browserCapabilities } from "../../obd/driver";
 import type { ObdScanResult } from "../../obd/driver";
@@ -152,15 +155,21 @@ function AppScan() {
   }
 
   async function onManualSave() {
-    const normal = normaliseDtc(manualCode);
-    if (!normal) {
+    // Manual entry accepts one or several codes ("P0301 P0420", comma or
+    // space separated) so the acceptance pair can be typed in together.
+    const parts = manualCode.split(/[\s,;]+/).filter((p) => p.length > 0);
+    const normals = parts.map((p) => normaliseDtc(p));
+    if (normals.length === 0 || normals.some((n) => n === null)) {
       setManualInvalid(true);
       return;
     }
     setManualInvalid(false);
     setPhase({ kind: "working", label: t.manualSaving });
     const ok = await persistScan("manual", {
-      codes: [{ code: normal, status: "stored" }],
+      codes: (normals as string[]).map((code) => ({
+        code,
+        status: "stored" as const,
+      })),
       vin: null,
     });
     if (ok) {
@@ -601,6 +610,38 @@ function ScanResult({
 }) {
   return (
     <div className="space-y-6">
+      {/* FREE verdict — rendered ABOVE the codes list. Rules-engine verdict,
+          never gated: no lock, no badge, no blur, no dimming (AGENTS.md). */}
+      {scan.diagnosis ? (
+        <div>
+          <VerdictPanel
+            severity={scan.diagnosis.verdict as Severity}
+            summary={scan.diagnosis.summary}
+            source="rules"
+            codeCount={scan.codes.length}
+          />
+          <div className="mt-2 rounded-card border border-line bg-surface p-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-fg-subtle">
+              {APP_COPY.faultCode.diagnosisReasonsLabel}
+            </p>
+            <ul className="mt-1.5 space-y-1.5">
+              {scan.diagnosis.reasons.map((reason, i) => (
+                <li
+                  key={i}
+                  className="text-sm leading-relaxed text-fg-muted"
+                >
+                  {reason}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      ) : (
+        <p className="rounded-card border border-line bg-surface p-4 text-xs leading-relaxed text-fg-subtle">
+          {APP_COPY.faultCode.verdictMismatchNote}
+        </p>
+      )}
+
       <section className="rounded-card border border-line bg-surface p-5 shadow-sm">
         <h2 className="text-sm font-bold text-fg">{t.resultHeading}</h2>
         {/* Source badge: demo data is never presented as real. */}
@@ -627,26 +668,58 @@ function ScanResult({
             {t.resultEmpty}
           </p>
         ) : (
-          <ul className="mt-3 space-y-2">
-            {scan.codes.map((c) => (
-              <li
-                key={c.id}
-                className="rounded-card border border-line bg-surface-sunken p-3"
-              >
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="font-mono text-base font-bold tracking-wider text-fg">
-                    {c.code}
-                  </span>
-                  <span className="rounded-full bg-neutral-fill px-2.5 py-0.5 text-xs font-semibold text-neutral-fg">
-                    {statusLabel[c.status] ?? c.status}
-                  </span>
-                </div>
-                {/* No invented definitions: the catalog is empty until S4. */}
-                <p className="mt-1 text-xs leading-relaxed text-fg-subtle">
-                  {APP_COPY.faultCode.meaningPendingNote}
-                </p>
-              </li>
-            ))}
+          <ul className="mt-3 space-y-3">
+            {scan.codeDetails.length > 0
+              ? scan.codeDetails.map((c) =>
+                  c.known ? (
+                    <li key={c.id}>
+                      <FaultCodeCard
+                        code={c.code}
+                        title={c.title ?? c.code}
+                        severity={c.severity as Severity}
+                        genericCause={c.genericCause ?? undefined}
+                        system={c.system ?? undefined}
+                        status={c.status}
+                      />
+                    </li>
+                  ) : (
+                    <li
+                      key={c.id}
+                      className="rounded-card border border-line bg-surface-sunken p-3"
+                    >
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="font-mono text-base font-bold tracking-wider text-fg">
+                          {c.code}
+                        </span>
+                        <span className="rounded-full bg-neutral-fill px-2.5 py-0.5 text-xs font-semibold text-neutral-fg">
+                          {statusLabel[c.status] ?? c.status}
+                        </span>
+                      </div>
+                      {/* Honest fallback: never invent a meaning. */}
+                      <p className="mt-1 text-xs leading-relaxed text-fg-subtle">
+                        {APP_COPY.faultCode.notInCatalogNote}
+                      </p>
+                    </li>
+                  ),
+                )
+              : scan.codes.map((c) => (
+                  <li
+                    key={c.id}
+                    className="rounded-card border border-line bg-surface-sunken p-3"
+                  >
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="font-mono text-base font-bold tracking-wider text-fg">
+                        {c.code}
+                      </span>
+                      <span className="rounded-full bg-neutral-fill px-2.5 py-0.5 text-xs font-semibold text-neutral-fg">
+                        {statusLabel[c.status] ?? c.status}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs leading-relaxed text-fg-subtle">
+                      {APP_COPY.faultCode.notInCatalogNote}
+                    </p>
+                  </li>
+                ))}
           </ul>
         )}
       </section>

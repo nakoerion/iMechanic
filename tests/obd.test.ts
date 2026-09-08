@@ -71,9 +71,9 @@ describe("ELM327 byte-pair codec", () => {
 
 describe("parseDtcResponseText — mode 03/07/0A replies", () => {
   it("parses a stored-codes reply with echo + prompt", () => {
-    // "43 02 04 20 03 01" = P0420 + P0301.
-    const codes = parseDtcResponseText("03\r43 02 04 20 03 01\r\r>", "03");
-    expect(codes).toEqual(["P0420", "P0301"]);
+    // "43 02 04 20 01 71" = P0420 + P0171 (the current demo stored pair).
+    const codes = parseDtcResponseText("03\r43 02 04 20 01 71\r\r>", "03");
+    expect(codes).toEqual(["P0420", "P0171"]);
   });
 
   it("reads the response header, not the echo", () => {
