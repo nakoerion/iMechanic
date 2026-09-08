@@ -29,7 +29,8 @@ bun install         # install dependencies
 bun run dev         # dev server on port 3000 (hot reload)
 bun run build       # production build (vite build → dist/)
 bun run migrate     # apply pending SQL migrations from db/migrations/
-bun run test        # run the vitest suite (requires DATABASE_URL)
+bun run test        # run the vitest suite (pure unit tests need no DB;
+                    # DB-backed suites need TEST_DATABASE_URL — see below)
 ```
 
 Do not run `bun run dev` and `bun run build` at the same time on a small machine.
@@ -40,8 +41,33 @@ Never commit values for any of these — they are injected into the environment.
 
 | Variable | Status | Purpose |
 | --- | --- | --- |
-| `DATABASE_URL` | required now | Neon Postgres connection string. Used by server functions (`src/db.ts`), `bun run migrate` and the test suite. Queries fail with a clear error if it is unset. |
+| `DATABASE_URL` | required now | Neon Postgres connection string. Used by server functions (`src/db.ts`) and `bun run migrate`. Queries fail with a clear error if it is unset. |
+| `TEST_DATABASE_URL` | required for DB-backed tests | Separate Neon **branch** for tests. Never point it at production. |
+| `MIGRATION_DATABASE_URL` | optional override | When set, `bun run migrate` targets this URL instead of `DATABASE_URL`. Used by the migration test to exercise the runner against the test database. |
 | `ANTHROPIC_API_KEY` | required from S4 | LLM key for AI root-cause analysis. When absent or the AI is unavailable, the app must say so and fall back to the deterministic rules engine — never fabricate a diagnosis. |
+
+## Test database isolation
+
+DB-backed tests (`tests/schema.test.ts`, `tests/migrate.test.ts`, the scan
+persistence block in `tests/obd.test.ts`) must never touch production — the
+production database holds real sessions and the public waitlist. They connect
+only through the `tests/test-db.ts` helper:
+
+- The helper reads `TEST_DATABASE_URL` (a separate Neon branch — create one in
+  the Neon dashboard and export its connection string:
+  `export TEST_DATABASE_URL='postgresql://…'`).
+- If `TEST_DATABASE_URL` is **unset**, the suite aborts with a clear message
+  instead of running — the pure unit tests (dtc/obd parsing, diagnosis, auth)
+  still pass with no DB at all.
+- If `TEST_DATABASE_URL` **equals** `DATABASE_URL`, the suite aborts too — the
+  variable must never point at production.
+- To exercise the migration runner against the test database, the migration
+  test sets `MIGRATION_DATABASE_URL=$TEST_DATABASE_URL` when spawning
+  `scripts/migrate.ts`; a normal `bun run migrate` uses `DATABASE_URL`.
+
+No test suite reads the production URL — the only whole-word `DATABASE_URL`
+match under `tests/` is the equality guard inside `tests/test-db.ts` itself
+(`TEST_DATABASE_URL` mentions elsewhere are the new variable, not production).
 
 ## Route map
 

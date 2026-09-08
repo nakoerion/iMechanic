@@ -18,12 +18,17 @@
  *
  * Consequence: migration files are applied exactly once, so they do NOT need
  * to be idempotent. Never edit an already-applied file — add a new one.
+ *
+ * URL override (S3-R2 test isolation): the runner uses MIGRATION_DATABASE_URL
+ * when set, falling back to DATABASE_URL for normal operation. The migration
+ * test points the override at the isolated test database; real `bun run
+ * migrate` uses DATABASE_URL unchanged.
  */
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { Client } from "@neondatabase/serverless";
 
-const url = process.env.DATABASE_URL;
+const url = process.env.MIGRATION_DATABASE_URL ?? process.env.DATABASE_URL;
 if (!url) {
   console.error(
     "DATABASE_URL is not set — connect a database before running migrations.",

@@ -1,15 +1,20 @@
 /**
- * Migration runner tests (S1.1 — QA defect D3).
+ * Migration runner tests (S1.1 — QA defect D3; S3-R2 test isolation).
  *
- * Runs the real `scripts/migrate.ts` against the live database. Both
- * migrations are already applied there, so a correct runner must be a
- * clean no-op that exits 0 — that IS the re-runnability guarantee.
+ * Runs the real `scripts/migrate.ts` against the ISOLATED test database
+ * (via tests/test-db.ts) — never production. The test DB gets all migrations
+ * applied there first, so a correct runner must be a clean no-op that exits
+ * 0 — that IS the re-runnability guarantee.
+ *
+ * Guard placement: requireTestDbUrl() runs in beforeAll (not module scope),
+ * so the unset-variable abort fails this suite's hooks instead of the whole
+ * file — the pure unit suites in other files still run and pass.
  */
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
 import { readdirSync } from "node:fs";
 import path from "node:path";
-import { neon } from "@neondatabase/serverless";
+import { requireTestDbUrl, testDb } from "./test-db";
 
 const siteDir = path.join(import.meta.dirname, "..");
 /* Derived from the migrations dir, not hardcoded (S1.2): the ledger must
@@ -17,13 +22,21 @@ const siteDir = path.join(import.meta.dirname, "..");
 const migrationFiles = readdirSync(path.join(siteDir, "db", "migrations"))
   .filter((f) => f.endsWith(".sql"))
   .sort();
-const url = process.env.DATABASE_URL;
-if (!url) throw new Error("DATABASE_URL must be set to run migration tests.");
-const db = neon(url);
+
+let url: string;
+let db: ReturnType<typeof testDb>;
+
+beforeAll(() => {
+  url = requireTestDbUrl(); // throws the clear abort message when unset
+  db = testDb();
+});
 
 function runMigrate() {
   return spawnSync("bun", ["run", "scripts/migrate.ts"], {
     cwd: siteDir,
+    // MIGRATION_DATABASE_URL routes the runner at the test DB for this
+    // test only; normal `bun run migrate` still uses production.
+    env: { ...process.env, MIGRATION_DATABASE_URL: url },
     encoding: "utf8",
     timeout: 60_000,
   });

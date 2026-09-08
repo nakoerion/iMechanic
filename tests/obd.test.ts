@@ -1,11 +1,12 @@
 /**
  * ELM327 parsing, DTC validation, demo dataset, and scan-validator tests
  * (Slice S3). The first two suites are pure unit tests (no database); the
- * third exercises the server-side scan validation against the live database
+ * third exercises the server-side scan validation against the ISOLATED test
+ * database (via tests/test-db.ts — never production)
  * and deletes every row it creates.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { neon } from "@neondatabase/serverless";
+import { testDb } from "./test-db";
 import {
   decodeDtcPair,
   encodeDtcPair,
@@ -163,15 +164,16 @@ describe("demo simulator", () => {
   });
 });
 
-describe("scan persistence validation (live database)", () => {
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL must be set to run scan tests.");
-  const db = neon(url);
+describe("scan persistence validation (isolated test database)", () => {
+  // Lazy: testDb() throws the clear abort when TEST_DATABASE_URL is unset,
+  // and that must fail only this block's hooks — never the pure suites above.
+  let db: ReturnType<typeof testDb>;
   const tag = `s3val-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
   const email = `s3-validation-${tag}@test.invalid`;
   let userId: string;
 
   beforeAll(async () => {
+    db = testDb();
     const [u] = await db.query("INSERT INTO users (email) VALUES ($1) RETURNING id", [
       email,
     ]);
@@ -179,6 +181,7 @@ describe("scan persistence validation (live database)", () => {
   });
 
   afterAll(async () => {
+    if (!db) return; // beforeAll aborted (no test DB) — nothing to clean up
     await db.query("DELETE FROM users WHERE email = $1", [email]);
   });
 

@@ -155,6 +155,33 @@ R2/R3/R4 and F1–F8 are NOT touched — separate delegations.
 - **Contract in repo** — `docs/APP_SPEC.md` is a copy of the shared
   `APP_SPEC.md` (shared copy kept in place).
 
+## S3 merge-gate R2 (engineer, branch s3-obd2) — test database isolation
+
+Implements review section R2 of `/home/team/shared/REVIEW-S3.md`. R1 untouched
+(already landed), R3/R4 and F1–F8 NOT touched — separate delegations.
+
+- **Helper `tests/test-db.ts`** — exports `requireTestDbUrl()` (reads
+  TEST_DATABASE_URL; throws a clear setup-messages abort when unset, throws a
+  second abort when it equals the production URL) and `testDb()` (neon handle
+  bound to the guarded URL). The equality guard is the single allowed
+  production-URL reference under `tests/`.
+- **All DB-backed tests migrated off production** — `tests/schema.test.ts`,
+  `tests/migrate.test.ts`, and the scan-persistence block in `tests/obd.test.ts`
+  now go through the helper; no test suite reads the production URL. Pure unit
+  suites (dtc/obd parsing, diagnosis, auth) need no DB.
+- **Runner override `scripts/migrate.ts`** — uses MIGRATION_DATABASE_URL when
+  set, falls back to DATABASE_URL. The migration test spawns the runner with
+  MIGRATION_DATABASE_URL pointed at the test DB; normal `bun run migrate`
+  still targets production unchanged.
+- **README** — new "Test database isolation" section: TEST_DATABASE_URL
+  requirement (separate Neon branch), both abort conditions, and how the
+  migration runner is pointed at it for the migration test.
+- **Convention going forward:** DB-backed tests use `testDb()` from
+  `tests/test-db.ts` and `@test.invalid` emails cleaned up in afterAll; they
+  must never read the production URL. Blocked until the owner provides
+  TEST_DATABASE_URL in Secrets — until then the DB suites abort with the
+  helper's message (verified), which IS the correct behaviour.
+
 ## S3 QA follow-up (engineer, branch s3-obd2, commit 026eb39)
 
 ### Issue 1 — mobile tap misroute on "Run demo scan" — REAL defect, FIXED
