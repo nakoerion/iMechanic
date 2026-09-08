@@ -98,17 +98,18 @@ export const createVehicle = createServerFn({ method: "POST" })
     return createVehicleCore(requireUserId(user), data);
   });
 
-/** Persist a scan + its codes. */
+/** Persist a scan + its codes (+ the live transcript for live scans). */
 export const saveScan = createServerFn({ method: "POST" })
   .validator((input: unknown) => {
     if (typeof input !== "object" || input === null) {
       throw new Error("A scan needs a source and a list of codes.");
     }
-    const { source, vehicleId, vin, codes } = input as {
+    const { source, vehicleId, vin, codes, transcript } = input as {
       source?: unknown;
       vehicleId?: unknown;
       vin?: unknown;
       codes?: unknown;
+      transcript?: unknown;
     };
     return {
       source,
@@ -118,6 +119,9 @@ export const saveScan = createServerFn({ method: "POST" })
           : String(vehicleId),
       vin: typeof vin === "string" ? vin : null,
       codes,
+      // Passed through as-is; saveScanCore validates + bounds it, and only
+      // honours it for source='live'. Demo/manual never send one.
+      transcript: transcript ?? null,
     };
   })
   .handler(async ({ data }): Promise<PersistedScan> => {

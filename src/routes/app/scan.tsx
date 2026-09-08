@@ -124,6 +124,10 @@ function AppScan() {
             code: c.code,
             status: c.status,
           })),
+          // R3 persistence: live scans carry the session transcript into
+          // raw_json. Demo/manual have none. The transcript is persisted
+          // data only — the UI never renders it as a raw dump.
+          transcript: source === "live" ? (result.transcript ?? null) : null,
         },
       });
       setJustScannedId(saved.id);
@@ -729,6 +733,14 @@ function ScanResult({
         <h2 className="text-sm font-bold text-fg">{t.clearButton}</h2>
         <p className="mt-1 text-xs leading-relaxed text-fg-subtle">
           {t.clearConfirm}
+        </p>
+        {/* R4 safety honesty — free surface, no lock, no badge. Both warnings
+            show whenever the clear confirmation shows. */}
+        <p className="mt-1 text-xs leading-relaxed text-fg-subtle">
+          {t.clearHidesNote}
+        </p>
+        <p className="mt-1 text-xs leading-relaxed text-fg-subtle">
+          {t.clearReadinessNote}
         </p>
         {scan.source === "demo" && (
           <p className="mt-1 text-xs leading-relaxed text-fg-subtle">

@@ -182,6 +182,55 @@ Implements review section R2 of `/home/team/shared/REVIEW-S3.md`. R1 untouched
   TEST_DATABASE_URL in Secrets — until then the DB suites abort with the
   helper's message (verified), which IS the correct behaviour.
 
+## S3 merge-gate R3 (engineer, branch s3-obd2) — live-scan transcript in raw_json
+
+Implements review section R3 of `/home/team/shared/REVIEW-S3.md`. R1/R2
+untouched, R4 in the same pass below, F1–F8 NOT touched.
+
+- **Transcript types `src/obd/driver.ts`** — `ObdTranscriptEntry`
+  (`{at, command, response}`: ISO timestamp + exact command text + the raw
+  reply exactly as the adapter sent it, never reinterpreted) and
+  `ObdTranscript` (`{transport: bluetooth | serial, adapter, entries}`).
+  `ObdScanResult` gains an optional `transcript` (live only). The shared
+  `ObdDriver` interface is unchanged — the transcript is live-driver-specific
+  (manual entry and demo have no adapter to transcribe).
+- **Live driver `src/obd/elm327-live.ts`** — `LiveElmDriver` accumulates a
+  session log via the factored-out pure helper `appendTranscriptEntry()`;
+  every exchange (`ATZ/ATE0/ATH0/0100`, modes 03/07/0A, `0902`, `04`) goes
+  through `exchange()` which logs command → raw reply. `getTranscript()`
+  returns transport kind + adapter identity + a copy of the entries.
+  `readCodes()` returns the transcript with the result. OBD traffic only —
+  nothing sensitive is logged.
+- **Persistence** — `saveScan` validator passes `transcript` through;
+  `saveScanCore` validates it (`validateTranscript`: transport enum,
+  non-empty adapter, ≤ 32 entries, bounded lengths) and persists it into
+  `scans.raw_json` for `source='live'` merged alongside `{vin}`. Demo/manual
+  persist as before (transcript ignored for them). `scan.tsx`'s live path
+  forwards `result.transcript`; persistence only — the UI never renders raw
+  dumps (the raw-next-to-interpretation UI is a later slice).
+- **Tests** — 2 pure unit tests in `tests/obd.test.ts` (log-accumulation
+  command→response shape incl. verbatim raw reply; pre-connect transcript
+  exposes transport + identity with empty entries for both choices).
+  Verified: `bun run test` → 35 passed / 16 skipped (51 total); the 3 DB
+  suites abort with the TEST_DATABASE_URL message — expected and correct.
+  `bun run build` clean.
+
+## S3 merge-gate R4 (engineer, branch s3-obd2) — clear-codes confirmation copy
+
+Implements review section R4 of `/home/team/shared/REVIEW-S3.md`.
+
+- **Copy `src/lib/copy.ts` (`APP_COPY.scan`)** — two new plain-English
+  elements: `clearHidesNote` (clearing without fixing hides rather than
+  solves; the light may return) and `clearReadinessNote` (clearing resets
+  the readiness monitors; a drive cycle is needed before a TÜV / MOT
+  inspection or the car may not pass). Existing `clearConfirm` and
+  `cleared` ("re-scan to confirm") lines kept verbatim.
+- **Wiring `src/routes/app/scan.tsx` (`ScanResult` clear section)** — both
+  warnings render whenever the clear confirmation shows, on all sources.
+  Free surface: no lock, no badge, no dimming, no gating — unchanged.
+- **Verification:** `bun run build` clean; strings confirmed wired in the
+  clear section (QA does the full browser pass).
+
 ## S3 QA follow-up (engineer, branch s3-obd2, commit 026eb39)
 
 ### Issue 1 — mobile tap misroute on "Run demo scan" — REAL defect, FIXED

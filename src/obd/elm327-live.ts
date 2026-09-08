@@ -53,7 +53,21 @@ type SerialPortLike = {
 };
 
 import { ObdError, parseDtcResponseText, parseVinResponseText } from "../lib/dtc";
-import type { ObdDriver, ObdScanResult } from "./driver";
+import type { ObdDriver, ObdScanResult, ObdTranscript, ObdTranscriptEntry } from "./driver";
+
+/**
+ * Pure log-accumulation helper (R3). Appends one timestamped
+ * command → response exchange to the session log. Kept separate from the
+ * driver so unit tests can exercise the log shape without hardware.
+ */
+export function appendTranscriptEntry(
+  log: ObdTranscriptEntry[],
+  command: string,
+  response: string,
+): ObdTranscriptEntry[] {
+  log.push({ at: new Date().toISOString(), command, response });
+  return log;
+}
 
 /* Many cheap ELM327 clones advertise Nordic UART (FFE0/FFE1) or the
  * SPP-style 0000fff0 service. Try each candidate pair in order. */
@@ -255,6 +269,8 @@ export type LiveConnectChoice = "bluetooth" | "serial";
 export class LiveElmDriver implements ObdDriver {
   private transport: LineTransport | null = null;
   private readonly choice: LiveConnectChoice;
+  /** Session transcript: timestamped command → raw-reply pairs (R3). */
+  private transcriptLog: ObdTranscriptEntry[] = [];
 
   constructor(choice: LiveConnectChoice) {
     this.choice = choice;
@@ -266,16 +282,40 @@ export class LiveElmDriver implements ObdDriver {
       : "ELM327 adapter";
   }
 
+  /**
+   * The session transcript accumulated so far: transport type, adapter
+   * identity, and every command → raw-reply exchange. Live-driver-specific —
+   * the shared `ObdDriver` interface deliberately does not carry it (manual
+   * entry and demo have no adapter to transcribe).
+   */
+  getTranscript(): ObdTranscript {
+    const t = this.transport;
+    return {
+      transport: t?.kind ?? this.choice,
+      adapter: t?.name ?? "ELM327 adapter",
+      entries: [...this.transcriptLog],
+    };
+  }
+
+  /** One command exchange, logged exactly as the adapter replied. */
+  private async exchange(cmd: string): Promise<string> {
+    const t = this.requireTransport();
+    await t.writeLine(cmd);
+    const reply = await t.readUntilPrompt();
+    appendTranscriptEntry(this.transcriptLog, cmd, reply);
+    return reply;
+  }
+
   async connect(): Promise<void> {
     this.transport =
       this.choice === "bluetooth"
         ? await connectBluetooth()
         : await connectSerial();
+    this.transcriptLog = [];
     // ELM327 handshake: reset, echo off, headers off, then prove the car answers.
     const replies: Record<string, string> = {};
     for (const cmd of ["ATZ", "ATE0", "ATH0", "0100"] as const) {
-      await this.transport.writeLine(cmd);
-      replies[cmd] = await this.transport.readUntilPrompt();
+      replies[cmd] = await this.exchange(cmd);
     }
     if (/\b(UNABLE TO CONNECT|NO SYNC|BUS BUSY|BUS ERROR)\b/.test(replies["0100"]!.toUpperCase())) {
       const t = this.transport;
@@ -289,33 +329,28 @@ export class LiveElmDriver implements ObdDriver {
   }
 
   async readCodes(): Promise<ObdScanResult> {
-    const t = this.requireTransport();
     const codes: ObdScanResult["codes"] = [];
     for (const [mode, status] of [
       ["03", "stored"],
       ["07", "pending"],
       ["0A", "permanent"],
     ] as const) {
-      await t.writeLine(mode);
-      const reply = await t.readUntilPrompt();
+      const reply = await this.exchange(mode);
       for (const code of parseDtcResponseText(reply, mode)) {
         codes.push({ code, status });
       }
     }
     let vin: string | null = null;
     try {
-      await t.writeLine("0902");
-      vin = parseVinResponseText(await t.readUntilPrompt());
+      vin = parseVinResponseText(await this.exchange("0902"));
     } catch {
       vin = null; // VIN is a bonus — a car that won't report it still scans.
     }
-    return { codes, vin };
+    return { codes, vin, transcript: this.getTranscript() };
   }
 
   async clearCodes(): Promise<void> {
-    const t = this.requireTransport();
-    await t.writeLine("04");
-    await t.readUntilPrompt();
+    await this.exchange("04");
     // Service 04 has no parseable payload to verify against — the re-scan
     // (S5 "Verify") is the honest confirmation that the codes are gone.
   }

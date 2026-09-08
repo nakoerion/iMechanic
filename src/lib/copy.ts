@@ -131,6 +131,13 @@ export const APP_COPY = {
     resultSavedNote: "Saved to your history.",
     clearButton: "Clear codes",
     clearConfirm: "Clearing tells the car to erase its stored codes.",
+    /* R4 safety honesty: clearing hides rather than fixes (the light may
+     * come back), and it resets the readiness monitors (drive cycle needed
+     * before a TÜV / MOT inspection). Free surfaces — never locked. */
+    clearHidesNote:
+      "Clearing without fixing the fault hides the problem rather than solving it — if the fault is still there, the light may come back.",
+    clearReadinessNote:
+      "Clearing also resets the car's readiness monitors. Before an emissions or roadworthiness inspection (TÜV / MOT), the car needs a drive cycle for the monitors to report ready again, or it may not pass.",
     clearDemoNote: "This resets the simulated demo adapter — it touches no real car.",
     clearFreeNote: "Free, always — no pay-to-clear, ever.",
     clearing: "Clearing…",

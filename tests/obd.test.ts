@@ -20,6 +20,7 @@ import {
   DemoDriver,
   demoDatasetAsElmResponse,
 } from "../src/obd/demo-simulator";
+import { appendTranscriptEntry, LiveElmDriver } from "../src/obd/elm327-live";
 
 describe("normaliseDtc — user-typed code validation", () => {
   it("accepts canonical codes", () => {
@@ -160,6 +161,34 @@ describe("demo simulator", () => {
       expect(parseDtcResponseText(demoDatasetAsElmResponse(mode), mode)).toEqual(
         expected,
       );
+    }
+  });
+});
+
+describe("live transcript log (R3, pure — no hardware, no DB)", () => {
+  it("accumulates timestamped command → raw-response pairs", () => {
+    const log: Parameters<typeof appendTranscriptEntry>[0] = [];
+    appendTranscriptEntry(log, "ATZ", "ATZ\rELM327 v1.5\r\r>");
+    appendTranscriptEntry(log, "03", "03\r43 02 04 20 01 71\r\r>");
+    expect(log).toHaveLength(2);
+    expect(log[0]!.command).toBe("ATZ");
+    // The honest raw data: the reply is kept exactly as the adapter sent it.
+    expect(log[1]!.response).toBe("03\r43 02 04 20 01 71\r\r>");
+    for (const entry of log) {
+      expect(typeof entry.at).toBe("string");
+      expect(entry.at.length).toBeGreaterThan(0);
+    }
+    expect(new Date(log[0]!.at).getTime()).not.toBeNaN();
+  });
+
+  it("exposes an empty transcript with transport + identity before connect", () => {
+    for (const choice of ["bluetooth", "serial"] as const) {
+      const driver = new LiveElmDriver(choice);
+      const t = driver.getTranscript();
+      expect(t.transport).toBe(choice);
+      expect(typeof t.adapter).toBe("string");
+      expect(t.adapter.length).toBeGreaterThan(0);
+      expect(t.entries).toEqual([]);
     }
   });
 });

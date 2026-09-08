@@ -21,6 +21,7 @@ import {
   type Verdict,
 } from "../lib/diagnosis";
 import { isDtcStatus, normaliseDtc } from "../lib/dtc";
+import type { ObdTranscript } from "../obd/driver";
 
 const db = sql();
 
@@ -289,6 +290,48 @@ export async function createVehicleCore(
 }
 
 /**
+ * Validate the live-scan transcript (R3). Returns a normalised copy or null.
+ * Strictly bounded: at most 32 entries, each capped in length, so raw_json
+ * stays a readable session log rather than an unbounded dump.
+ */
+function validateTranscript(value: unknown): ObdTranscript | null {
+  if (typeof value !== "object" || value === null) return null;
+  const { transport, adapter, entries } = value as {
+    transport?: unknown;
+    adapter?: unknown;
+    entries?: unknown;
+  };
+  if (transport !== "bluetooth" && transport !== "serial") return null;
+  if (typeof adapter !== "string" || adapter.trim().length === 0) return null;
+  if (!Array.isArray(entries) || entries.length > 32) return null;
+  const clean: ObdTranscript["entries"] = [];
+  for (const e of entries) {
+    if (typeof e !== "object" || e === null) return null;
+    const { at, command, response } = e as {
+      at?: unknown;
+      command?: unknown;
+      response?: unknown;
+    };
+    if (
+      typeof at !== "string" ||
+      typeof command !== "string" ||
+      typeof response !== "string" ||
+      command.length === 0 ||
+      command.length > 64 ||
+      response.length > 4096
+    ) {
+      return null;
+    }
+    clean.push({
+      at: at.slice(0, 64),
+      command: command.slice(0, 64),
+      response: response.slice(0, 4096),
+    });
+  }
+  return { transport, adapter: adapter.slice(0, 120), entries: clean };
+}
+
+/**
  * Persist a scan + its codes + its rules-engine diagnosis. The diagnosis row
  * is written on EVERY scan path (manual, demo, live): the rules verdict is
  * free forever and the result view renders it from the same response, no
@@ -302,6 +345,7 @@ export async function saveScanCore(
     vehicleId: string | null;
     vin: string | null;
     codes: unknown;
+    transcript?: unknown;
   },
 ): Promise<PersistedScan> {
   if (!isScanSource(input.source)) {
@@ -327,9 +371,17 @@ export async function saveScanCore(
     typeof input.vin === "string" && input.vin.trim().length > 0
       ? input.vin.trim().slice(0, 32)
       : null;
+  // R3: live scans persist the full command/response transcript alongside
+  // the VIN. Demo/manual carry none (no adapter to transcribe) — {vin}
+  // behaviour is unchanged for them.
+  const transcript =
+    input.source === "live" ? validateTranscript(input.transcript) : null;
+  const rawJson: Record<string, unknown> = {};
+  if (vin) rawJson.vin = vin;
+  if (transcript) rawJson.transcript = transcript;
   const scans = await db<{ id: string }[]>`
     INSERT INTO scans (user_id, vehicle_id, source, raw_json)
-    VALUES (${userId}, ${vehicleId}, ${input.source}, ${vin ? JSON.stringify({ vin }) : null}::jsonb)
+    VALUES (${userId}, ${vehicleId}, ${input.source}, ${Object.keys(rawJson).length > 0 ? JSON.stringify(rawJson) : null}::jsonb)
     RETURNING id`;
   const scanId = scans[0]!.id;
   for (const c of codes) {

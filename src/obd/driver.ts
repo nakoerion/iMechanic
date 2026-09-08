@@ -24,11 +24,39 @@ export type ObdCode = {
   status: DtcStatus;
 };
 
+/**
+ * One raw command → response exchange with the adapter (R3 honesty
+ * guarantee). The honest raw data: exact command text and the reply
+ * exactly as the adapter sent it — never trimmed, never reinterpreted.
+ */
+export type ObdTranscriptEntry = {
+  /** ISO timestamp of when the reply arrived. */
+  at: string;
+  /** The exact command text sent (ATZ, 03, 0902, 04…). */
+  command: string;
+  /** The raw reply text, exactly as the adapter sent it. */
+  response: string;
+};
+
+/**
+ * Session log for a live scan. Persisted into `scans.raw_json` (the seed of
+ * the replay regression library) — never rendered as raw dumps in the UI.
+ * Live-driver-specific: manual entry and demo have no adapter to transcribe.
+ */
+export type ObdTranscript = {
+  transport: "bluetooth" | "serial";
+  /** Adapter identity string (device / port name). OBD traffic only. */
+  adapter: string;
+  entries: ObdTranscriptEntry[];
+};
+
 /** What a scan run produced — mirrored into `scans` + `scan_codes`. */
 export type ObdScanResult = {
   codes: ObdCode[];
   /** The VIN the car reported, if any. Never invented. */
   vin: string | null;
+  /** Live scans only: the session transcript. Absent for demo/manual. */
+  transcript?: ObdTranscript | null;
 };
 
 /** Where the transport can go. Checked before any connect button is enabled. */
