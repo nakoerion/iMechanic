@@ -33,6 +33,13 @@ export const APP_COPY = {
       permanent: "Permanent",
     },
     freeNote: "Reading this code and clearing it is free.",
+    /* Shown for codes missing from the seeded catalog — the code text is
+     * never invented, only the lookup is missing. */
+    notInCatalogNote:
+      "Not in our catalog yet — we have not looked this one up, so no meaning is shown rather than a guessed one. Your code is saved and stays free to read.",
+    diagnosisReasonsLabel: "Why this verdict",
+    verdictMismatchNote:
+      "Saved before the verdict layer shipped — re-scan to get a verdict.",
   },
   verdict: {
     heading: "Severity verdict",
@@ -73,6 +80,74 @@ export const APP_COPY = {
     invalidLinkDescription:
       "Links are single-use and expire after 15 minutes. Request a new one and try again.",
     backToSignIn: "Back to sign in",
+  },
+  scan: {
+    title: "Scan",
+    description: "Read your fault codes and decide what to do next.",
+    demoLabel: "Demo",
+    manualLabel: "Manual",
+    liveLabel: "Live adapter",
+    demoHeading: "Try the demo",
+    demoDescription:
+      "A simulated adapter with a small demo dataset — no hardware needed. Clearly labelled, saved as a demo scan.",
+    demoDatasetNote: "Demo car: a 2016 petrol hatchback. Not a real vehicle.",
+    demoButton: "Run demo scan",
+    demoRunning: "Reading demo codes…",
+    manualHeading: "Type a fault code",
+    manualDescription:
+      "Already read the code elsewhere? Type it in and it becomes a scan with one stored code.",
+    manualLabelInput: "Fault code",
+    manualHint: "For example P0420 — one letter P, C, B or U plus four characters. Several codes at once works too: separate them with spaces or commas.",
+    manualButton: "Save as scan",
+    manualSaving: "Saving…",
+    manualInvalid: "That doesn't look like a fault code — check it and try again.",
+    liveHeading: "Connect your adapter",
+    liveDescription:
+      "Plug in your ELM327 adapter, switch the ignition on (engine can stay off), then connect.",
+    liveConnectBluetooth: "Connect over Bluetooth",
+    liveConnectSerial: "Connect over USB",
+    liveConnecting: "Connecting…",
+    liveReading: "Reading codes…",
+    liveUnavailableTitle: "Live connect isn't available in this browser",
+    liveUnavailableDescription:
+      "This browser supports neither Web Bluetooth nor Web Serial, so it cannot talk to an OBD2 adapter. Demo mode works everywhere with no hardware, or type a code in manually.",
+    liveErrorPrefix: "Live connection failed.",
+    vehicleHeading: "Which car is this for?",
+    vehicleNone: "No car attached — the scan saves without one.",
+    vehicleExistingLabel: "Your cars",
+    vehicleNewMakeLabel: "Make",
+    vehicleNewMakeHint: "For example VW",
+    vehicleNewModelLabel: "Model",
+    vehicleNewModelHint: "For example Golf",
+    vehicleNewYearLabel: "Year (optional)",
+    vehicleAttachNew: "Add this car and attach it",
+    vehicleAttaching: "Adding…",
+    resultHeading: "Codes read",
+    resultDemoBadge: "Demo scan — simulated data, not a real car",
+    resultManualBadge: "Manual entry — typed in by you",
+    resultLiveBadge: "Live scan — read from your adapter",
+    resultEmpty: "No fault codes found. The car reports a clean bill of health.",
+    resultVinLabel: "VIN reported",
+    resultSavedNote: "Saved to your history.",
+    clearButton: "Clear codes",
+    clearConfirm: "Clearing tells the car to erase its stored codes.",
+    /* R4 safety honesty: clearing hides rather than fixes (the light may
+     * come back), and it resets the readiness monitors (drive cycle needed
+     * before a TÜV / MOT inspection). Free surfaces — never locked. */
+    clearHidesNote:
+      "Clearing without fixing the fault hides the problem rather than solving it — if the fault is still there, the light may come back.",
+    clearReadinessNote:
+      "Clearing also resets the car's readiness monitors. Before an emissions or roadworthiness inspection (TÜV / MOT), the car needs a drive cycle for the monitors to report ready again, or it may not pass.",
+    clearDemoNote: "This resets the simulated demo adapter — it touches no real car.",
+    clearFreeNote: "Free, always — no pay-to-clear, ever.",
+    clearing: "Clearing…",
+    cleared: "Clear request sent. Re-scan to confirm the codes are gone.",
+    clearError: "Clearing didn't go through — your codes are untouched. Try again.",
+    clearManualNote: "Only a connected car can be cleared — a typed code has nothing on the car to erase.",
+    saveError: "We couldn't save that scan — nothing was stored. Try again.",
+    latestHeading: "Last scan",
+    newScanButton: "Start a new scan",
+    newScanRunning: "Starting…",
   },
   account: {
     title: "Account",

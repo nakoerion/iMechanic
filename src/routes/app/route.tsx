@@ -7,12 +7,6 @@ import { AppShell, ScreenContainer } from "../../components/app-shell";
 import { getCurrentUser } from "../../server/auth";
 
 export const Route = createFileRoute("/app")({
-  /* noindex until scanning ships in S3 (QA defect D26): every /app screen
-     currently says the feature isn't built yet — that must not be what a
-     search engine indexes as the product. Remove when S3 goes live. */
-  head: () => ({
-    meta: [{ name: "robots", content: "noindex" }],
-  }),
   beforeLoad: async ({ location }) => {
     // Route protection (Slice S2): the whole /app tree requires a session —
     // except the two public auth surfaces /app/signin and /app/verify, which

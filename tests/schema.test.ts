@@ -1,16 +1,28 @@
 /**
- * Live-database schema constraint tests (S1.1 — QA defects D4, D5, D11).
- *
- * These run against the real Neon database in DATABASE_URL. All rows they
- * create carry a unique @test.invalid email and are deleted in afterAll via
- * the users cascade — the same path GDPR erasure uses.
+ * Schema constraint tests against the ISOLATED test database (S1.1 — QA
+ * defects D4, D5, D11; S3-R2 test isolation). These never touch production:
+ * the connection comes from tests/test-db.ts, which aborts unless
+ * TEST_DATABASE_URL points at a separate Neon branch. All rows created carry
+ * a unique @test.invalid email and are deleted in afterAll via the users
+ * cascade — the same path GDPR erasure uses.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { neon } from "@neondatabase/serverless";
+import { testDb } from "./test-db";
 
-const url = process.env.DATABASE_URL;
-if (!url) throw new Error("DATABASE_URL must be set to run schema tests.");
-const db = neon(url);
+const dbRef: { db?: ReturnType<typeof testDb> } = {};
+// Lazy: testDb() throws the clear abort when TEST_DATABASE_URL is unset;
+// resolving it in beforeAll keeps the failure inside the hooks, and afterAll
+// must tolerate the abort (nothing was created).
+const db = new Proxy({} as ReturnType<typeof testDb>, {
+  get: (_t, prop) => {
+    const handle = dbRef.db;
+    if (!handle) throw new Error("test DB unavailable — beforeAll aborted.");
+    const value = (handle as unknown as Record<string | symbol, unknown>)[prop];
+    return typeof value === "function"
+      ? (value as (...a: unknown[]) => unknown).bind(handle)
+      : value;
+  },
+});
 
 const tag = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 let userA: string; // owns the vehicle/scan/diagnosis
@@ -34,6 +46,7 @@ const CHECK_VIOLATION = "23514";
 const NOT_NULL_VIOLATION = "23502";
 
 beforeAll(async () => {
+  dbRef.db = testDb(); // throws the clear abort when TEST_DATABASE_URL is unset
   const [a] = await db.query(
     "INSERT INTO users (email, country) VALUES ($1, 'DE') RETURNING id",
     [`schema-test-a-${tag}@test.invalid`],
@@ -63,6 +76,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  if (!dbRef.db) return; // beforeAll aborted (no test DB) — nothing to clean up
   // The users cascade must clean up everything the tests created.
   await db.query("DELETE FROM users WHERE email LIKE $1", [
     `schema-test-%-${tag}@test.invalid`,

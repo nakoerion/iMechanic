@@ -239,6 +239,10 @@
 @layer base {
   html {
     scroll-behavior: smooth;
+    /* QA: same tab-bar clearance for keyboard/focus-driven scrolling of the
+       document — a focused element must never rest under the fixed tab bar. */
+    scroll-padding-bottom: 6rem;
+    scroll-padding-top: 4.5rem;
   }
   body {
     @apply bg-white font-sans text-slate-900 antialiased;
@@ -251,7 +255,15 @@
     color: var(--color-fg);
   }
   section {
+    /* QA: "Run demo scan" was auto-scrolled into view but rested UNDER the
+       fixed bottom tab bar — the tab's tap zone swallowed the button. The
+       scroll target (section) must never settle under the tab bar, so it is
+       given a bottom safe zone equal to the tab bar height + breathing room;
+       margin (not padding) keeps the safe zone out of the visual layout.
+       The rule applies at every width; desktop has no tab bar, but margin
+       only prevents horizontal drift there and is harmless. */
     scroll-margin-top: 4.5rem;
+    scroll-margin-bottom: 6rem;
   }
   /* Visible keyboard focus everywhere — people use this app one-handed,
      in bad light, sometimes with an external keyboard on desktop. */
