@@ -109,6 +109,25 @@
 
 /* -------------------------------------------------------------- */
 /* Role values. Unlayered on purpose so they win over @layer theme. */
+/*                                                                  */
+/* CONTRAST — the numbers below are measured, not aspirational.     */
+/* Every `n.n:1` in this section is the WCAG 2.1 contrast ratio of  */
+/* that exact hex against the background it is actually painted on  */
+/* in this theme (sRGB relative luminance). Thresholds: 4.5:1 for   */
+/* normal text (AA), 3:1 for large text, icons and borders.         */
+/* If you change a hex, recompute its ratio and update the comment  */
+/* in the same edit — a stale number here is worse than none.       */
+/*                                                                  */
+/* Two known sub-threshold pairs, deliberately recorded rather than */
+/* quietly fixed (palette change is a separate decision):           */
+/*   - light --ui-fg-subtle on --ui-app-bg = 4.3:1 (AA needs 4.5)   */
+/*   - light --ui-neutral-border on --ui-neutral-fill = 2.3:1, and  */
+/*     --ui-fg-invert on it = 2.6:1 (non-text needs 3:1). This is   */
+/*     the "unknown / not yet assessed" chip only — never a verdict.*/
+/*                                                                  */
+/* Severity text is rendered at FULL opacity, never dimmed: an      */
+/* `opacity-80` on --ui-ok-fg drops it from 9.2:1 to 5.4:1, and the */
+/* verdict is the one line a driver reads at a glance in daylight.  */
 /* -------------------------------------------------------------- */
 
 :root {
@@ -120,37 +139,37 @@
   --ui-surface-raised: #ffffff;
   --ui-line: #e2e8f0;
   --ui-line-strong: #cbd5e1;
-  --ui-fg: #0f172a;
-  --ui-fg-muted: #475569;
-  --ui-fg-subtle: #64748b;
-  --ui-fg-invert: #ffffff;
+  --ui-fg: #0f172a;         /* 16.3:1 on app-bg, 17.9:1 on surface */
+  --ui-fg-muted: #475569;   /* 6.9:1 on app-bg, 7.6:1 on surface */
+  --ui-fg-subtle: #64748b;  /* 4.8:1 on surface; 4.3:1 on app-bg — under AA */
+  --ui-fg-invert: #ffffff;  /* 2.6:1 on neutral-border — under 3:1, see above */
 
   --ui-brand: #fbbf24;
   --ui-brand-strong: #f59e0b;
-  --ui-brand-fg: #92400e;
-  --ui-on-brand: #0b1220;
+  --ui-brand-fg: #92400e;   /* 7.1:1 on surface, 6.5:1 on app-bg */
+  --ui-on-brand: #0b1220;   /* 11.2:1 on brand, 8.7:1 on brand-strong */
 
   --ui-ok-fill: #ecfdf5;
-  --ui-ok-border: #047857;
-  --ui-ok-fg: #064e3b;
+  --ui-ok-border: #047857;  /* 5.2:1 on ok-fill */
+  --ui-ok-fg: #064e3b;      /* 9.2:1 on ok-fill, 9.7:1 on surface */
   --ui-ok-solid: #047857;
-  --ui-on-ok: #ffffff;
+  --ui-on-ok: #ffffff;      /* 5.5:1 on ok-solid */
 
   --ui-warn-fill: #fff7ed;
-  --ui-warn-border: #c2410c;
-  --ui-warn-fg: #7c2d12;
+  --ui-warn-border: #c2410c; /* 4.9:1 on warn-fill */
+  --ui-warn-fg: #7c2d12;     /* 8.8:1 on warn-fill, 9.4:1 on surface */
   --ui-warn-solid: #c2410c;
-  --ui-on-warn: #ffffff;
+  --ui-on-warn: #ffffff;     /* 5.2:1 on warn-solid */
 
   --ui-danger-fill: #fef2f2;
-  --ui-danger-border: #b91c1c;
-  --ui-danger-fg: #7f1d1d;
+  --ui-danger-border: #b91c1c; /* 5.9:1 on danger-fill */
+  --ui-danger-fg: #7f1d1d;     /* 9.2:1 on danger-fill, 10.0:1 on surface */
   --ui-danger-solid: #b91c1c;
-  --ui-on-danger: #ffffff;
+  --ui-on-danger: #ffffff;     /* 6.5:1 on danger-solid */
 
   --ui-neutral-fill: #f1f5f9;
-  --ui-neutral-border: #94a3b8;
-  --ui-neutral-fg: #334155;
+  --ui-neutral-border: #94a3b8; /* 2.3:1 on neutral-fill — under 3:1 */
+  --ui-neutral-fg: #334155;     /* 9.5:1 on neutral-fill */
 
   --ui-focus: #f59e0b;
 }
@@ -164,37 +183,37 @@
   --ui-surface-raised: #16223c;
   --ui-line: #24334f;
   --ui-line-strong: #3a4c6f;
-  --ui-fg: #f1f5f9;
-  --ui-fg-muted: #b4c0d4;
-  --ui-fg-subtle: #94a3b8;
-  --ui-fg-invert: #0b1220;
+  --ui-fg: #f1f5f9;         /* 17.8:1 on app-bg, 15.9:1 on surface */
+  --ui-fg-muted: #b4c0d4;   /* 10.6:1 on app-bg, 9.5:1 on surface */
+  --ui-fg-subtle: #94a3b8;  /* 7.6:1 on app-bg, 6.8:1 on surface */
+  --ui-fg-invert: #0b1220;  /* 3.9:1 on neutral-border — icon/chip only */
 
   --ui-brand: #fbbf24;
   --ui-brand-strong: #fcd34d;
-  --ui-brand-fg: #fcd34d;
-  --ui-on-brand: #0b1220;
+  --ui-brand-fg: #fcd34d;   /* 12.0:1 on surface, 13.5:1 on app-bg */
+  --ui-on-brand: #0b1220;   /* 11.2:1 on brand, 13.0:1 on brand-strong */
 
   --ui-ok-fill: #06251c;
-  --ui-ok-border: #34d399;
-  --ui-ok-fg: #6ee7b7;
+  --ui-ok-border: #34d399;  /* 8.5:1 on ok-fill */
+  --ui-ok-fg: #6ee7b7;      /* 10.7:1 on ok-fill, 11.4:1 on surface */
   --ui-ok-solid: #34d399;
-  --ui-on-ok: #04231a;
+  --ui-on-ok: #04231a;      /* 8.7:1 on ok-solid */
 
   --ui-warn-fill: #2e1607;
-  --ui-warn-border: #fb923c;
-  --ui-warn-fg: #fdba74;
+  --ui-warn-border: #fb923c; /* 7.5:1 on warn-fill */
+  --ui-warn-fg: #fdba74;     /* 10.1:1 on warn-fill, 10.3:1 on surface */
   --ui-warn-solid: #fb923c;
-  --ui-on-warn: #2e1607;
+  --ui-on-warn: #2e1607;     /* 7.5:1 on warn-solid */
 
   --ui-danger-fill: #350f10;
-  --ui-danger-border: #f87171;
-  --ui-danger-fg: #fca5a5;
+  --ui-danger-border: #f87171; /* 6.2:1 on danger-fill */
+  --ui-danger-fg: #fca5a5;     /* 9.0:1 on danger-fill, 9.2:1 on surface */
   --ui-danger-solid: #f87171;
-  --ui-on-danger: #350f10;
+  --ui-on-danger: #350f10;     /* 6.2:1 on danger-solid */
 
   --ui-neutral-fill: #16223c;
-  --ui-neutral-border: #64748b;
-  --ui-neutral-fg: #cbd5e1;
+  --ui-neutral-border: #64748b; /* 3.3:1 on neutral-fill */
+  --ui-neutral-fg: #cbd5e1;     /* 10.7:1 on neutral-fill */
 
   --ui-focus: #fbbf24;
 

@@ -324,6 +324,22 @@ UI only: no backend, rules-engine, or paywall changes.
   the TEST_DATABASE_URL message — expected. No new tests (no pure logic
   added).
 
+## S1b cleanup — severity text at full contrast + honest WCAG docs (designer, branch s1b-severity-cleanups)
+
+- `verdict-panel.tsx`: dropped the two `opacity-80` classes on severity text
+  (the "SEVERITY VERDICT" heading and the `freeNote` line). Severity text is
+  never dimmed — `opacity-80` cost ok-fg 9.2:1 → 5.4:1 in light theme, and the
+  verdict is the one line a driver reads at a glance. Other `opacity-*` usage
+  elsewhere (button/form-field/landing) is intentional and untouched.
+- `app.css`: every `-fg`, `on-*` and severity `-border` token now carries its
+  MEASURED WCAG 2.1 ratio against the background it is actually painted on, in
+  both themes, plus a header block stating the method and the rule that a hex
+  change must update its ratio in the same edit. No hex changed. Two recorded
+  sub-threshold pairs, light theme only, left for a palette decision:
+  `fg-subtle` on `app-bg` 4.3:1 (AA needs 4.5), and the unknown-severity chip
+  `neutral-border` on `neutral-fill` 2.3:1 / `fg-invert` on `neutral-border`
+  2.6:1 (non-text needs 3:1). No verdict colour is affected.
+
 ## S5 backend — Decide + Act + Verify server layer (engineer, branch s5-decide-act-verify-backend)
 
 Backend only: no UI panels, no paywall/gating (S6), no rules-engine
