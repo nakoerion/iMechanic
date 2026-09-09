@@ -397,3 +397,53 @@ verdict changes. No migration — all columns/tables already exist.
   COST_ESTIMATE_NOTE, workshopRecommended as a safety card), Act steps
   (checkable, tools list, REPAIR_GUIDANCE_NOTE), Verify button
   (verifyRepairJob → verified vs still-present states).
+
+## S5 UI — Decide + Act + Verify surfaces (engineer, branch s5-decide-act-verify-ui)
+
+UI only: no backend/RPC, rules-engine, cost/repair-library, or paywall changes.
+
+- **Copy `src/lib/copy.ts` (`APP_COPY.decideAct`)** — all new UI strings:
+  decide heading/intro, DIY/workshop labels + hints, workshop-recommended
+  safety title/body, act heading/safety/tools labels, start/advance/verify
+  button labels, still-present/verified states, generic job-error + sign-in
+  notes. The estimate/guidance notes themselves live in the lib modules
+  (`COST_ESTIMATE_NOTE`, `REPAIR_GUIDANCE_NOTE`) and are rendered verbatim.
+- **Component `src/components/decide/cost-decision-card.tsx`**
+  (`CostDecisionCard`) — the free Decide surface. DIY + workshop bands via
+  `formatMoneyRange` with `COST_ESTIMATE_NOTE` always attached; bands only,
+  never a single number. Market resolves from persisted `diagnoses.currency`
+  (EUR→DE, GBP→GB, ALL→AL) with an optional `users.country` override.
+  `workshopRecommended` renders a plain danger-styled SAFETY card ("Book a
+  workshop — this one is not safe to DIY") — no lock, no Pro badge, no
+  upgrade language, no dimming. AI/Pro framing stays on the AI panel.
+- **Component `src/components/repair/guided-repair-panel.tsx`**
+  (`GuidedRepairPanel`) — the Act surface. `repairGuideFor(family)` title +
+  safetyNote in danger styling + ordered steps as LOCAL-STATE-ONLY
+  checkboxes (no persistence in this slice) with title/body, tools as small
+  chips, and estMinutes; `REPAIR_GUIDANCE_NOTE` always at the bottom.
+- **Component `src/components/repair/repair-job-section.tsx`**
+  (`RepairJobSection`) — Act + Verify flow. "Start this repair" calls
+  `startRepairJob({ diagnosisId })`; forward-only state buttons
+  (planned → in_progress → done via `advanceRepairJob`); "Verify with my
+  latest scan" calls `latestScan()` then `verifyRepairJob({ jobId, scanId })`
+  — `{verified:true}` shows the ok-styled success state, `{verified:false,
+  stillPresent}` shows "Still present: [codes]" with the job untouched.
+  The backend rejects the original scan, so the UI pre-checks
+  `latest.id === scanId` and says to run a new scan first. All RPC errors
+  (not signed in, validation, transport) render a plain note, never a crash.
+  The guide always renders below the job state — starting a job only adds
+  the persisted state, the steps are free guidance either way.
+- **Placement `src/routes/app/scan.tsx` (`ScanResult`)** — golden-path order:
+  free VerdictPanel + reasons → AI panel → `CostDecisionCard` → Act/Verify
+  section → fault-codes list → clear-codes. Free verdict untouched
+  (`source="rules"`), AI panel untouched, no lock/badge/blur anywhere.
+- **Workshop-recommended styling rule:** safety cards use the
+  `border-danger bg-danger-fill text-danger-fg` treatment (same as the guide
+  safetyNote) — visually a warning, never an upsell.
+- **Verification:** `bun run build` clean (scan chunk includes the new
+  sections); `bun run test` → 67 passed / 16 skipped, 3 DB suites abort with
+  the TEST_DATABASE_URL message — expected. Render sanity check: SSR smoke
+  script rendered CostDecisionCard (heading + safety card + bands + note,
+  no upsell language) and GuidedRepairPanel (heading + safety + checkboxes
+  + guidance note) without crash; RepairJobSection import-checked. No new
+  tests (no pure logic added).
