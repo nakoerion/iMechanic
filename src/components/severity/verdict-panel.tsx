@@ -58,7 +58,7 @@ export function VerdictPanel({
       <div className="p-5">
         <p
           className={cn(
-            "text-xs font-semibold uppercase tracking-wider opacity-80",
+            "text-xs font-semibold uppercase tracking-wider",
             c.text,
           )}
         >
@@ -112,7 +112,7 @@ export function VerdictPanel({
         {aiUnavailable && (
           <p className="font-medium">{APP_COPY.verdict.aiUnavailable}</p>
         )}
-        <p className="opacity-80">{APP_COPY.verdict.freeNote}</p>
+        <p>{APP_COPY.verdict.freeNote}</p>
       </div>
     </section>
   );
