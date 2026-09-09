@@ -54,6 +54,16 @@ export type PersistedDiagnosis = {
   confidence: number;
 };
 
+/** The AI root-cause row (diagnoses source='ai') — the Pro layer. */
+export type PersistedAiDiagnosis = {
+  id: string;
+  rootCause: string | null;
+  reasoning: string | null;
+  confidence: number | null;
+  summary: string | null;
+  causes: { cause: string; confidence: number }[] | null;
+};
+
 export type PersistedScan = {
   id: string;
   source: ScanSource;
@@ -66,6 +76,8 @@ export type PersistedScan = {
   codeDetails: PersistedCodeDetail[];
   /** The free rules-engine verdict — always present (every scan writes one). */
   diagnosis: PersistedDiagnosis | null;
+  /** The Pro AI root cause (source='ai' row) — null until requested. */
+  aiDiagnosis: PersistedAiDiagnosis | null;
 };
 
 function isScanSource(value: unknown): value is ScanSource {
@@ -115,6 +127,12 @@ function toPersistedScan(
   diagnosisRow: {
     id: string;
     verdict: string;
+    reasoning: string | null;
+    confidence: number | null;
+  } | null,
+  aiRow: {
+    id: string;
+    root_cause: string | null;
     reasoning: string | null;
     confidence: number | null;
   } | null,
@@ -189,8 +207,66 @@ function toPersistedScan(
           confidence: diagnosisRow.confidence ?? RULES_CONFIDENCE,
         }
       : null,
+    aiDiagnosis: parseAiRow(aiRow),
   };
 }
+
+/**
+ * Decode an AI diagnoses row. The reasoning text is written by ai.ts as
+ * `<summary>\n<full reasoning>\nRanked causes:\n- <cause> (<n>%)…`;
+ * `parseAiRow` splits it back into summary + reasoning + structured causes.
+ * Rows written another way decode gracefully (causes: null).
+ */
+function parseAiRow(
+  row: {
+    id: string;
+    root_cause: string | null;
+    reasoning: string | null;
+    confidence: number | null;
+  } | null,
+): PersistedAiDiagnosis | null {
+  if (!row) return null;
+  const full = row.reasoning ?? "";
+  const marker = "\nRanked causes:\n";
+  const idx = full.indexOf(marker);
+  const head = idx >= 0 ? full.slice(0, idx) : full;
+  const lines = head.split("\n");
+  const summary = lines[0]?.trim() ? lines[0]!.trim() : null;
+  const reasoning = lines.slice(1).join("\n").trim() || (summary ? "" : head);
+  let causes: PersistedAiDiagnosis["causes"] = null;
+  if (idx >= 0) {
+    const parsed = full
+      .slice(idx + marker.length)
+      .split("\n")
+      .map(
+        (line) =>
+          line.match(/^- (.*) \((\d{1,3})%\)$/) as RegExpMatchArray | null,
+      )
+      .filter((m): m is RegExpMatchArray => m !== null)
+      .map((m) => ({
+        cause: m[1]!.trim(),
+        confidence: Math.max(0, Math.min(100, Number(m[2]))),
+      }))
+      .filter((c) => c.cause.length > 0);
+    causes = parsed.length > 0 ? parsed : null;
+  }
+  return {
+    id: row.id,
+    rootCause: row.root_cause,
+    reasoning,
+    confidence: row.confidence,
+    summary,
+    causes,
+  };
+}
+
+/**
+ * Serialise AI content into the single `reasoning` text column of a
+ * source='ai' diagnoses row (the inverse of parseAiRow). Lives in ai-core
+ * (pure, no DB) so unit tests can import it without a database; re-exported
+ * here for ai.ts. Safe to import statically: ai-core holds no sql() handle.
+ */
+export { serializeAiReasoning } from "./ai-core";
 
 async function loadScanForUser(
   userId: string,
@@ -230,17 +306,123 @@ async function loadScanForUser(
         }[]>`
         SELECT code, title, system, generic_cause, severity_default FROM dtc_catalog
         WHERE code IN (SELECT DISTINCT UNNEST(${codes.map((c) => c.code)}::text[]))`;
-  const diagnoses = await db<{
+  // Two diagnoses rows per scan at most: source='rules' (the free verdict,
+  // always present) and source='ai' (the Pro root cause, written on demand
+  // by ai.ts). Fetched distinctly — never ORDER BY/LIMIT across sources.
+  const rulesRows = await db<{
     id: string;
     verdict: string;
     reasoning: string | null;
     confidence: number | null;
   }[]>`
     SELECT id, verdict, reasoning, confidence FROM diagnoses
-    WHERE scan_id = ${scan.id} AND user_id = ${userId}
+    WHERE scan_id = ${scan.id} AND user_id = ${userId} AND source = 'rules'
     ORDER BY created_at DESC
     LIMIT 1`;
-  return toPersistedScan(scan, codes, catalog, diagnoses[0] ?? null);
+  const aiRows = await db<{
+    id: string;
+    root_cause: string | null;
+    reasoning: string | null;
+    confidence: number | null;
+  }[]>`
+    SELECT id, root_cause, reasoning, confidence FROM diagnoses
+    WHERE scan_id = ${scan.id} AND user_id = ${userId} AND source = 'ai'
+    ORDER BY created_at DESC
+    LIMIT 1`;
+  return toPersistedScan(
+    scan,
+    codes,
+    catalog,
+    rulesRows[0] ?? null,
+    aiRows[0] ?? null,
+  );
+}
+
+/**
+ * Context for the AI diagnosis of one scan: codes + catalog metadata +
+ * attached vehicle + the free rules verdict. All queries user-scoped; null
+ * when the scan does not belong to the caller. Exported for ai.ts.
+ */
+export async function loadAiContextCore(
+  userId: string,
+  scanId: string,
+): Promise<{
+  scanId: string;
+  codes: {
+    code: string;
+    status: string;
+    title: string | null;
+    genericCause: string | null;
+    system: string | null;
+  }[];
+  vehicle: {
+    make: string | null;
+    model: string | null;
+    year: number | null;
+    mileageKm: number | null;
+  } | null;
+  rulesVerdict: Verdict;
+  rulesSummary: string;
+  rulesReasons: string[];
+} | null> {
+  const scan = await loadScanForUser(userId, scanId);
+  if (!scan || !scan.diagnosis) return null;
+  const vehicles = scan.vehicleId
+    ? await db<{
+        make: string | null;
+        model: string | null;
+        year: number | null;
+        mileage_km: number | null;
+      }[]>`
+      SELECT make, model, year, mileage_km FROM vehicles
+      WHERE id = ${scan.vehicleId} AND user_id = ${userId}`
+    : [];
+  const v = vehicles[0];
+  return {
+    scanId: scan.id,
+    codes: scan.codeDetails.map((c) => ({
+      code: c.code,
+      status: c.status,
+      title: c.title,
+      genericCause: c.genericCause,
+      system: c.system,
+    })),
+    vehicle: v
+      ? { make: v.make, model: v.model, year: v.year, mileageKm: v.mileage_km }
+      : null,
+    rulesVerdict: scan.diagnosis.verdict,
+    rulesSummary: scan.diagnosis.summary,
+    rulesReasons: scan.diagnosis.reasons,
+  };
+}
+
+/**
+ * Idempotency/cost guard + writer for the AI row. Returns the existing
+ * source='ai' row when present; otherwise inserts one with the SAME verdict
+ * as the rules row (the AI never overrides the free safety verdict).
+ * Exported for ai.ts.
+ */
+export async function getExistingAiRowCore(
+  userId: string,
+  scanId: string,
+): Promise<{ id: string } | null> {
+  const rows = await db<{ id: string }[]>`
+    SELECT id FROM diagnoses
+    WHERE scan_id = ${scanId} AND user_id = ${userId} AND source = 'ai'
+    ORDER BY created_at DESC
+    LIMIT 1`;
+  return rows[0] ?? null;
+}
+
+export async function insertAiDiagnosisCore(
+  userId: string,
+  scanId: string,
+  verdict: Verdict,
+  content: { rootCause: string; reasoning: string; confidence: number },
+): Promise<void> {
+  await db`
+    INSERT INTO diagnoses (scan_id, user_id, verdict, root_cause, confidence, reasoning, source)
+    VALUES (${scanId}, ${userId}, ${verdict}, ${content.rootCause}, ${content.confidence}, ${content.reasoning}, 'ai')`;
 }
 
 /** Vehicles belonging to the caller — for the scan screen's attach picker. */

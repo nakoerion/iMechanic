@@ -246,3 +246,46 @@ The handler re-fetched the latest scan after dropping local state, so the just-s
 4) Clear codes -> re-scan: "Clear request sent. Re-scan to confirm the codes are gone." note renders; re-scan shows "No fault codes found. The car reports a clean bill of health."; no crash. Root cause of prior behaviour: onDemoScan called demoDriver.reset(), which restored the dataset after clear — removed (clear must persist so re-scan verifies empty; reset stays in tests/S5).
 
 DB cleanup: 2 test users, 4 scans (demo×3 incl. cleared, manual×1), 9 scan_codes, 2 sessions deleted (cascade); BEFORE u2/sc4/cc9/ss2/vv0 -> AFTER all 0.
+
+## S4 backend — AI diagnosis server layer (engineer, branch s4-ai-backend)
+
+Backend only: no UI panel, no paywall/gating (S6), no rules-engine changes.
+
+- **`src/server/ai-core.ts`** (server-only, dynamically imported — same bundle
+  boundary as auth-core/scans-core): Anthropic Messages API client (`POST
+  https://api.anthropic.com/v1/messages`, model default
+  `claude-3-5-haiku-20241022` overridable via `ANTHROPIC_MODEL`, temp 0.2,
+  max_tokens 1024) via `fetch`, key from `ANTHROPIC_API_KEY` (never committed).
+  System prompt: reason over codes + catalog + vehicle + the free rules
+  verdict; ranked causes cheapest-to-confirm-first with 0-100 confidences;
+  never invent; never contradict a stop_driving verdict. Defensive JSON parse.
+  Discriminated result: `{available:true, aiDiagnosis:{summary, rootCause,
+  reasoning, confidence, causes[]}}` or `{available:false, reason}`.
+  **Fallback contract:** key missing → "AI diagnosis isn't configured yet.";
+  non-2xx/network/malformed → "AI diagnosis is unavailable right now." Never
+  fabricates. `fetchImpl`/`env` injectable for tests.
+- **`src/server/ai.ts`** — `createServerFn` RPC `getAiDiagnosis({scanId})`:
+  requires the signed-in user, idempotency guard first (existing source='ai'
+  row → return it, no re-call), else loads context and calls `runAiDiagnosis`.
+  On success INSERTs a second `diagnoses` row with source='ai' and the SAME
+  verdict as the rules row; `root_cause` = top cause, `reasoning` =
+  `serializeAiReasoning(ai)` (summary + reasoning + "Ranked causes:" plain
+  list). On `available:false` returns the reason and writes nothing.
+- **Two diagnoses per scan:** `loadScanForUser`/`toPersistedScan` now fetch
+  both rows distinctly (`WHERE source='rules'` → `diagnosis`, the free
+  verdict; `WHERE source='ai'` → new `aiDiagnosis` field, null until
+  requested). `parseAiRow` splits the serialised reasoning back into
+  summary/reasoning/structured causes. `PersistedScan` in `scans.ts` mirrors
+  `aiDiagnosis: {...} | null`. New helpers: `loadAiContextCore`,
+  `getExistingAiRowCore`, `insertAiDiagnosisCore` (all user-scoped). No schema
+  change (002 composite FK already covers the second row).
+- **Tests `tests/ai.test.ts`** — 11 pure tests, mocked fetch, no real network:
+  key-missing/non-2xx/throw/malformed/empty → available:false with the right
+  reason; well-formed → available:true with mapped ranked causes; confidence
+  clamping; prompt contents; serialise shape.
+- **Live smoke test:** `runAiDiagnosis` against the real key returned
+  `available:false` ("unavailable") — and that IS the verified-correct path:
+  Anthropic answered HTTP 400 "credit balance is too low", i.e. the key
+  authenticates fine but the account holds no credits, so no completion could
+  be bought. Plumbing (auth → request → honest fallback) proven end to end;
+  needs account credits before a real `available:true` can be observed.

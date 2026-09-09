@@ -40,6 +40,16 @@ export type PersistedDiagnosis = {
   confidence: number;
 };
 
+/** The AI root-cause row (diagnoses source='ai') — the Pro layer. */
+export type PersistedAiDiagnosis = {
+  id: string;
+  rootCause: string | null;
+  reasoning: string | null;
+  confidence: number | null;
+  summary: string | null;
+  causes: { cause: string; confidence: number }[] | null;
+};
+
 export type PersistedScan = {
   id: string;
   source: ScanSource;
@@ -50,6 +60,8 @@ export type PersistedScan = {
   catalogTitles: Record<string, string>;
   codeDetails: PersistedCodeDetail[];
   diagnosis: PersistedDiagnosis | null;
+  /** The Pro AI root cause (source='ai' row) — null until requested. */
+  aiDiagnosis: PersistedAiDiagnosis | null;
 };
 
 export type VehicleOption = {
