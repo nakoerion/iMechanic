@@ -11,6 +11,8 @@ import {
 import { FaultCodeCard } from "../../components/severity/fault-code-card";
 import { AiRootCausePanel } from "../../components/severity/ai-root-cause-panel";
 import { VerdictPanel } from "../../components/severity/verdict-panel";
+import { CostDecisionCard } from "../../components/decide/cost-decision-card";
+import { RepairJobSection } from "../../components/repair/repair-job-section";
 import { Button } from "../../components/ui/button";
 import { APP_COPY } from "../../lib/copy";
 import { normaliseDtc } from "../../lib/dtc";
@@ -651,6 +653,28 @@ function ScanResult({
           the fault-codes list. Never gates, blurs, or badges the free
           VerdictPanel above. */}
       <AiRootCausePanel scanId={scan.id} initial={scan.aiDiagnosis} />
+
+      {/* S5 Decide + Act + Verify — BELOW the free verdict + reasons and
+          BELOW the AI panel (golden-path order: Verdict → AI → Decide →
+          Act → Verify). Free surfaces, never locked/badged/blurred. */}
+      {scan.diagnosis && (
+        <CostDecisionCard
+          family={scan.diagnosis.repairFamily}
+          currency={scan.diagnosis.currency}
+          diyLowCents={scan.diagnosis.diyLowCents}
+          diyHighCents={scan.diagnosis.diyHighCents}
+          shopLowCents={scan.diagnosis.shopLowCents}
+          shopHighCents={scan.diagnosis.shopHighCents}
+          workshopRecommended={scan.diagnosis.workshopRecommended}
+        />
+      )}
+      {scan.diagnosis && (
+        <RepairJobSection
+          scanId={scan.id}
+          diagnosisId={scan.diagnosis.id}
+          family={scan.diagnosis.repairFamily}
+        />
+      )}
 
       <section className="rounded-card border border-line bg-surface p-5 shadow-sm">
         <h2 className="text-sm font-bold text-fg">{t.resultHeading}</h2>

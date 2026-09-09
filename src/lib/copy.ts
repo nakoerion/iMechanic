@@ -63,6 +63,46 @@ export const APP_COPY = {
     unavailableHeading: "AI diagnosis isn't available",
     errorNote: "Something went wrong asking for the AI analysis — your free verdict above is unaffected. Try again.",
   },
+  decideAct: {
+    decideHeading: "DIY or workshop?",
+    decideIntro:
+      "What this kind of repair usually costs — as bands, never a quote.",
+    diyLabel: "Doing it yourself",
+    diyHint: "Parts plus your own time.",
+    workshopLabel: "Independent workshop",
+    workshopHint: "Parts plus labour at an independent garage.",
+    workshopRecommendedTitle: "Book a workshop — this one is not safe to DIY",
+    workshopRecommendedBody:
+      "This fault can make the car unsafe or destroy expensive parts if it is worked on without the right tools. Take it to a workshop rather than attempting it yourself.",
+    actHeading: "Guided repair",
+    safetyLabel: "Safety first",
+    toolsLabel: "You'll need",
+    minutesShort: "min",
+    startButton: "Start this repair",
+    startingButton: "Starting…",
+    inProgressButton: "I'm working on it",
+    doneButton: "I've finished the steps",
+    advancingButton: "Saving…",
+    jobPlannedNote: "Planned — work through the steps above at your own pace.",
+    jobInProgressNote: "In progress — tick steps off as you go.",
+    jobDoneNote: "Done — now confirm with a re-scan below.",
+    verifyHeading: "Did the repair work?",
+    verifyDescription:
+      "Clear the codes, drive normally, then run a new scan. Verifying compares your latest scan against this one.",
+    verifyButton: "Verify with my latest scan",
+    verifyingButton: "Checking…",
+    verifySameScanNote:
+      "Your latest scan is this same scan — run a new scan after the repair, then verify against it.",
+    verifiedTitle: "Repair verified",
+    verifiedBody:
+      "Your latest scan no longer shows the original fault codes. Nice work — the repair held.",
+    stillPresentTitle: "Still present",
+    stillPresentBody:
+      "Your latest scan still shows these codes — the fault is still there. Recheck the steps above or book a workshop.",
+    jobErrorNote:
+      "That didn't go through — your repair progress is unchanged. Try again.",
+    signInNote: "Sign in to track repairs.",
+  },
   gallery: {
     title: "Design system gallery",
     internalBadge: "Internal — not a product screen",
