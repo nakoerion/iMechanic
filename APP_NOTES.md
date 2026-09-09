@@ -323,3 +323,77 @@ UI only: no backend, rules-engine, or paywall changes.
   panel); `bun run test` → 46 passed / 16 skipped, 3 DB suites abort with
   the TEST_DATABASE_URL message — expected. No new tests (no pure logic
   added).
+
+## S5 backend — Decide + Act + Verify server layer (engineer, branch s5-decide-act-verify-backend)
+
+Backend only: no UI panels, no paywall/gating (S6), no rules-engine
+verdict changes. No migration — all columns/tables already exist.
+
+- **`src/lib/cost.ts`** (pure, client-safe) — the deterministic
+  DIY-vs-workshop estimator. `repairFamilyFor({codes, verdict})` maps a
+  scan to ONE of 10 repair areas + a "general" fallback
+  (ignition/oxygen_sensor/catalyst/evap/cooling/airflow/egr/charging/
+  throttle_idle/engine_timing/general). It reuses `isMisfireCode` /
+  `isCatalystPairCode` from diagnosis.ts and mirrors the remaining family
+  regexes from that module's ladder (same patterns, not re-invented);
+  priority is by repair consequence (catalyst wins over a co-occurring
+  misfire — the converter prices the job, and the catalyst guide
+  sequences the misfire fix FIRST). Stored codes choose; pending-only
+  scans resolve from pending; unknown/empty → "general".
+- **Cost catalog approach:** `COST_CATALOG[family][DE|GB|AL]` holds an
+  indicative DIY band + workshop band in MINOR UNITS per brief (ALL ×100
+  like every currency so formatMoney keeps working; "general" is
+  deliberately widest — it prices a diagnostic visit, not a repair).
+  `estimateCosts(family, market)` returns the bands + currency with
+  `COST_ESTIMATE_NOTE` ("indicative bands, not quotes — vary by
+  vehicle/region/shop"), which the UI pass must render with every figure.
+  The DB row stores only the band MIDPOINTS + currency (re-priceable
+  without a backfill); the full band is derived at read time.
+- **Workshop-recommended safety rule:** `isWorkshopRecommended` fires on
+  `verdict === 'stop_driving'` OR stored-misfire + stored-catalyst
+  (defence-in-depth, independent of the verdict). Pending codes never
+  trigger it. This is a safety routing, NOT an upsell — no lock, no badge,
+  no Pro styling near it (free-tier trust rules apply).
+- **`src/lib/repair.ts`** (pure, client-safe) — the guided-repair step
+  library: 4–7 ordered steps per family (`repairStepsFor`) with title,
+  body, tools and estMinutes, each ending in a clear-and-rescan step,
+  plus `safetyNote` per family and `REPAIR_GUIDANCE_NOTE` ("general
+  guidance, not your car's workshop manual — stop and ask a workshop if
+  unsure"). Honest by construction: no torque specs, no part numbers, no
+  fix promises (pinned by tests).
+- **Persistence (`scans-core.ts`):** the rules-diagnosis save path now
+  INSERTs then UPDATEs the row with cost midpoints + currency (market from
+  the owner's `users.country`); the AI path (`ai.ts`) runs the same
+  treatment via `attachCostsCore` (insertAiDiagnosisCore now RETURNs the
+  id). `loadScanForUser` re-reads the midpoints and derives the full
+  bands at read time in the caller's market. `PersistedDiagnosis`
+  (mirrored in `scans.ts`) gains repairFamily/costDiyCents/costShopCents/
+  currency/diyLowCents/diyHighCents/shopLowCents/shopHighCents/
+  workshopRecommended — the UI pass renders with no new plumbing.
+  Server→server logic is inlined (not dynamically imported) to avoid a
+  scans-core↔repair-core import cycle; the pure functions are shared.
+- **Repair jobs (`src/server/repair-core.ts` + `src/server/repair.ts`,
+  dynamic-import pattern):** `startRepairJob({diagnosisId})` (caller-owned
+  diagnosis only; idempotent — returns the open job; inserts the family's
+  `repair_steps` once, tools stored as a JSON array string in the legacy
+  text column), `advanceRepairJob({jobId, state})` (forward-only
+  planned→in_progress→done; `verified` rejected — verification goes only
+  through the re-scan gate), `verifyRepairJob({jobId, scanId})` (requires
+  a NEW caller-owned scan; compares case-insensitively, ANY status — a
+  fault demoted to pending still counts as present; success sets
+  verified + verified_by_scan_id, failure returns honest
+  `{verified:false, stillPresent}` with the state untouched). Types
+  `PersistedRepairJob/PersistedRepairStep/VerifyResult` exported from
+  both layers.
+- **Tests `tests/cost.test.ts` (15) + `tests/repair.test.ts` (6)** —
+  pure, no DB: family mapping incl. catalyst-over-misfire priority,
+  general fallback, per-market currency + ordered bands, both
+  workshopRecommended triggers + pending-never, midpoint rounding, steps
+  ordered/non-empty/with tools for every family, safety notes, honesty
+  pins. Full suite: 67 passed / 16 skipped, 3 DB suites abort with
+  TEST_DATABASE_URL — expected. `bun run build` clean. DB-backed
+  repair_job tests omitted per brief (pure tests are the priority).
+- **Next (UI delegation):** Decide card (bands via formatMoneyRange +
+  COST_ESTIMATE_NOTE, workshopRecommended as a safety card), Act steps
+  (checkable, tools list, REPAIR_GUIDANCE_NOTE), Verify button
+  (verifyRepairJob → verified vs still-present states).

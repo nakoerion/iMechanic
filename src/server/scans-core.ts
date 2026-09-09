@@ -13,6 +13,11 @@
 
 import { sql } from "../db";
 import {
+  estimateCosts,
+  isWorkshopRecommended,
+  repairFamilyFor,
+} from "../lib/cost";
+import {
   diagnose,
   rootCauseFor,
   RULES_CONFIDENCE,
@@ -52,6 +57,26 @@ export type PersistedDiagnosis = {
   reasons: string[];
   source: "rules";
   confidence: number;
+  /**
+   * S5 Decide fields. `family` is the concrete repair area (pure,
+   * deterministic — recomputed at read time so it always agrees with the
+   * persisted midpoints). `costDiyCents`/`costShopCents` are the persisted
+   * band midpoints (null on rows written before S5); the full bands are
+   * derived at read time from the cost catalog in the caller's market.
+   */
+  repairFamily: import("../lib/cost").RepairFamily;
+  costDiyCents: number | null;
+  costShopCents: number | null;
+  currency: "EUR" | "GBP" | "ALL" | null;
+  diyLowCents: number;
+  diyHighCents: number;
+  shopLowCents: number;
+  shopHighCents: number;
+  /**
+   * Safety routing, NOT an upsell: true means "do not DIY this". The UI
+   * must render it as a safety card — no lock, no badge, no Pro styling.
+   */
+  workshopRecommended: boolean;
 };
 
 /** The AI root-cause row (diagnoses source='ai') — the Pro layer. */
@@ -129,12 +154,27 @@ function toPersistedScan(
     verdict: string;
     reasoning: string | null;
     confidence: number | null;
+    cost_diy_cents?: number | null;
+    cost_shop_cents?: number | null;
+    currency?: string | null;
   } | null,
   aiRow: {
     id: string;
     root_cause: string | null;
     reasoning: string | null;
     confidence: number | null;
+  } | null,
+  // S5 Decide: callers pass the already-resolved market country + full
+  // bands so toPersistedScan stays synchronous (no await inside the
+  // mapper). loadScanForUser computes them via repair-core.
+  decide?: {
+    family: import("../lib/cost").RepairFamily;
+    diyLowCents: number;
+    diyHighCents: number;
+    shopLowCents: number;
+    shopHighCents: number;
+    workshopRecommended: boolean;
+    currency: "EUR" | "GBP" | "ALL";
   } | null,
 ): PersistedScan {
   const raw = (scanRow.raw_json ?? {}) as { vin?: unknown };
@@ -205,6 +245,26 @@ function toPersistedScan(
           reasons,
           source: "rules",
           confidence: diagnosisRow.confidence ?? RULES_CONFIDENCE,
+          // S5 Decide. When `decide` is absent (older callers/tests) fall
+          // back to the deterministic family + a caller-free currency so
+          // the shape is always complete. Midpoints come from the row
+          // (null on pre-S5 rows); bands come from the catalog.
+          repairFamily: decide?.family ?? repairFamilyFor({ codes, verdict }),
+          costDiyCents: diagnosisRow.cost_diy_cents ?? null,
+          costShopCents: diagnosisRow.cost_shop_cents ?? null,
+          currency:
+            diagnosisRow.currency === "EUR" ||
+            diagnosisRow.currency === "GBP" ||
+            diagnosisRow.currency === "ALL"
+              ? diagnosisRow.currency
+              : (decide?.currency ?? null),
+          diyLowCents: decide?.diyLowCents ?? 0,
+          diyHighCents: decide?.diyHighCents ?? 0,
+          shopLowCents: decide?.shopLowCents ?? 0,
+          shopHighCents: decide?.shopHighCents ?? 0,
+          workshopRecommended:
+            decide?.workshopRecommended ??
+            isWorkshopRecommended({ codes, verdict }),
         }
       : null,
     aiDiagnosis: parseAiRow(aiRow),
@@ -309,13 +369,17 @@ async function loadScanForUser(
   // Two diagnoses rows per scan at most: source='rules' (the free verdict,
   // always present) and source='ai' (the Pro root cause, written on demand
   // by ai.ts). Fetched distinctly — never ORDER BY/LIMIT across sources.
+  // S5: the rules row carries the persisted cost midpoints + currency.
   const rulesRows = await db<{
     id: string;
     verdict: string;
     reasoning: string | null;
     confidence: number | null;
+    cost_diy_cents: number | null;
+    cost_shop_cents: number | null;
+    currency: string | null;
   }[]>`
-    SELECT id, verdict, reasoning, confidence FROM diagnoses
+    SELECT id, verdict, reasoning, confidence, cost_diy_cents, cost_shop_cents, currency FROM diagnoses
     WHERE scan_id = ${scan.id} AND user_id = ${userId} AND source = 'rules'
     ORDER BY created_at DESC
     LIMIT 1`;
@@ -329,12 +393,52 @@ async function loadScanForUser(
     WHERE scan_id = ${scan.id} AND user_id = ${userId} AND source = 'ai'
     ORDER BY created_at DESC
     LIMIT 1`;
+  // S5 Decide: the full cost bands are derived at read time from the
+  // catalog in the caller's market (their users.country). repair-core's
+  // decideFieldsFor owns the market lookup; inline it here to avoid a
+  // server→server dynamic import cycle (repair-core imports nothing from
+  // scans-core). The family derivation is pure and deterministic — the
+  // same inputs the write path used, so read and persisted midpoints
+  // always agree.
+  const users = await db<{ country: string | null }[]>`
+    SELECT country FROM users WHERE id = ${userId}`;
+  const country = users[0]?.country ?? null;
+  const decideCodes = codes.map((c) => ({
+    code: c.code,
+    status: isDtcStatus(c.status) ? c.status : "stored",
+  }));
+  const rulesVerdict: Verdict =
+    rulesRows[0]?.verdict === "drive_on" ||
+    rulesRows[0]?.verdict === "repair_soon" ||
+    rulesRows[0]?.verdict === "stop_driving"
+      ? rulesRows[0].verdict
+      : "repair_soon";
+  const decideFamily = repairFamilyFor({
+    codes: decideCodes,
+    verdict: rulesVerdict,
+  });
+  const decideEst = estimateCosts(decideFamily, country, {
+    codes: decideCodes,
+    verdict: rulesVerdict,
+  });
   return toPersistedScan(
     scan,
     codes,
     catalog,
     rulesRows[0] ?? null,
     aiRows[0] ?? null,
+    {
+      family: decideFamily,
+      diyLowCents: decideEst.diyLowCents,
+      diyHighCents: decideEst.diyHighCents,
+      shopLowCents: decideEst.shopLowCents,
+      shopHighCents: decideEst.shopHighCents,
+      workshopRecommended: isWorkshopRecommended({
+        codes: decideCodes,
+        verdict: rulesVerdict,
+      }),
+      currency: decideEst.currency,
+    },
   );
 }
 
@@ -419,10 +523,12 @@ export async function insertAiDiagnosisCore(
   scanId: string,
   verdict: Verdict,
   content: { rootCause: string; reasoning: string; confidence: number },
-): Promise<void> {
-  await db`
+): Promise<string> {
+  const rows = await db<{ id: string }[]>`
     INSERT INTO diagnoses (scan_id, user_id, verdict, root_cause, confidence, reasoning, source)
-    VALUES (${scanId}, ${userId}, ${verdict}, ${content.rootCause}, ${content.confidence}, ${content.reasoning}, 'ai')`;
+    VALUES (${scanId}, ${userId}, ${verdict}, ${content.rootCause}, ${content.confidence}, ${content.reasoning}, 'ai')
+    RETURNING id`;
+  return rows[0]!.id;
 }
 
 /** Vehicles belonging to the caller — for the scan screen's attach picker. */
@@ -600,9 +706,30 @@ export async function saveScanCore(
     codes: codes.map((c) => ({ code: c.code, status: c.status })),
     catalog: catalogMap,
   });
-  await db`
+  const created = await db<{ id: string }[]>`
     INSERT INTO diagnoses (scan_id, user_id, verdict, root_cause, confidence, reasoning, source)
-    VALUES (${scanId}, ${userId}, ${engine.verdict}, ${rootCauseFor(engine)}, ${RULES_CONFIDENCE}, ${engine.reasons.join("\n")}, 'rules')`;
+    VALUES (${scanId}, ${userId}, ${engine.verdict}, ${rootCauseFor(engine)}, ${RULES_CONFIDENCE}, ${engine.reasons.join("\n")}, 'rules')
+    RETURNING id`;
+  // S5 Decide: compute the repair family + cost bands and persist the
+  // midpoints + currency onto the row just written. Inline (not via
+  // repair-core) to avoid a server→server dynamic-import cycle; the logic
+  // is the same pure functions attachCostsCore uses.
+  const costFamily = repairFamilyFor({
+    codes: codes.map((c) => ({ code: c.code, status: c.status })),
+    verdict: engine.verdict,
+  });
+  const owners = await db<{ country: string | null }[]>`
+    SELECT country FROM users WHERE id = ${userId}`;
+  const costEst = estimateCosts(costFamily, owners[0]?.country ?? null, {
+    codes: codes.map((c) => ({ code: c.code, status: c.status })),
+    verdict: engine.verdict,
+  });
+  await db`
+    UPDATE diagnoses
+    SET cost_diy_cents = ${Math.round((costEst.diyLowCents + costEst.diyHighCents) / 2)},
+        cost_shop_cents = ${Math.round((costEst.shopLowCents + costEst.shopHighCents) / 2)},
+        currency = ${costEst.currency}
+    WHERE id = ${created[0]!.id} AND user_id = ${userId}`;
   const saved = await loadScanForUser(userId, scanId);
   if (!saved) throw new Error("The scan was saved but could not be re-read.");
   return saved;
