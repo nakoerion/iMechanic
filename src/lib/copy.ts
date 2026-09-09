@@ -51,6 +51,18 @@ export const APP_COPY = {
       "AI root-cause analysis is unavailable right now, so this is the rulebook verdict only.",
     codesLabel: "Codes read",
   },
+  aiRootCause: {
+    heading: "AI root cause",
+    triggerLabel: "Get AI root cause",
+    /* Pro surface, pre-S6: plain wording, no lock icon, no blur, no urgency. */
+    proNote: "A Pro feature — deeper analysis of your codes, in plain English.",
+    loadingLabel: "Thinking…",
+    rootCauseLabel: "Most likely root cause",
+    confidenceLabel: "Confidence",
+    rankedCausesLabel: "What to check first, in order",
+    unavailableHeading: "AI diagnosis isn't available",
+    errorNote: "Something went wrong asking for the AI analysis — your free verdict above is unaffected. Try again.",
+  },
   gallery: {
     title: "Design system gallery",
     internalBadge: "Internal — not a product screen",

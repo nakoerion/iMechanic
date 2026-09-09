@@ -289,3 +289,37 @@ Backend only: no UI panel, no paywall/gating (S6), no rules-engine changes.
   authenticates fine but the account holds no credits, so no completion could
   be bought. Plumbing (auth → request → honest fallback) proven end to end;
   needs account credits before a real `available:true` can be observed.
+
+## S4 UI — AI root-cause panel (engineer, branch s4-ai-ui)
+
+UI only: no backend, rules-engine, or paywall changes.
+
+- **Component `src/components/severity/ai-root-cause-panel.tsx`**
+  (`AiRootCausePanel`, props `scanId: string` + optional
+  `initial` = `PersistedScan.aiDiagnosis`).
+  States, all honest: **idle** (plain "Get AI root cause" trigger button +
+  short "Pro" note — NO lock icon, NO blur, NO countdown, NO fake urgency);
+  **loading** (spinner + "Thinking…" via the shared `Button loading` slot);
+  **ready** (summary, most-likely root cause, "Confidence" %, reasoning
+  paragraph, ranked causes as an `<ol>` in backend order —
+  cheapest-to-confirm-first, preserved as-is); **unavailable** (the
+  backend's `reason` rendered VERBATIM in a neutral info style — never
+  invents a diagnosis); **error** (transport/validator failure: honest note
+  that the free verdict above is unaffected + retry button).
+- **Explicit-trigger (cost) decision:** nothing fires on mount — each call
+  costs money and the feature is Pro. When an AI row is already persisted
+  (`initial` present), the panel renders it with NO network call; repeat
+  views never re-fire (the backend is idempotent too, but the UI never
+  leans on that).
+- **Placement:** rendered in `ScanResult` (`src/routes/app/scan.tsx`)
+  immediately AFTER the free verdict + reasons block and BEFORE the
+  fault-codes list. The free `VerdictPanel` is untouched (`source="rules"`,
+  never gated) — this panel never blurs, dims, badges, or locks it.
+- **Copy:** new `APP_COPY.aiRootCause` block in `src/lib/copy.ts`
+  (heading, trigger label, pro note, loading/root-cause/confidence/
+  ranked-causes labels, unavailable heading, error note). Same honest
+  voice; no mechanic-level guarantee the backend doesn't promise.
+- **Verification:** `bun run build` clean (incl. the scan chunk with the
+  panel); `bun run test` → 46 passed / 16 skipped, 3 DB suites abort with
+  the TEST_DATABASE_URL message — expected. No new tests (no pure logic
+  added).

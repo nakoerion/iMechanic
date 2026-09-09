@@ -9,6 +9,7 @@ import {
   ScanIcon,
 } from "../../components/icons";
 import { FaultCodeCard } from "../../components/severity/fault-code-card";
+import { AiRootCausePanel } from "../../components/severity/ai-root-cause-panel";
 import { VerdictPanel } from "../../components/severity/verdict-panel";
 import { Button } from "../../components/ui/button";
 import { APP_COPY } from "../../lib/copy";
@@ -645,6 +646,11 @@ function ScanResult({
           {APP_COPY.faultCode.verdictMismatchNote}
         </p>
       )}
+
+      {/* PRO AI root cause (S4 UI) — BELOW the free verdict + reasons, BEFORE
+          the fault-codes list. Never gates, blurs, or badges the free
+          VerdictPanel above. */}
+      <AiRootCausePanel scanId={scan.id} initial={scan.aiDiagnosis} />
 
       <section className="rounded-card border border-line bg-surface p-5 shadow-sm">
         <h2 className="text-sm font-bold text-fg">{t.resultHeading}</h2>
