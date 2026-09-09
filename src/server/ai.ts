@@ -99,10 +99,15 @@ export const getAiDiagnosis = createServerFn({ method: "POST" })
       return { available: false, reason: result.reason };
     }
     const ai = result.aiDiagnosis;
-    await insertAiDiagnosisCore(userId, data.scanId, context.rulesVerdict, {
+    const { attachCostsCore } = await import("./repair-core");
+    const aiId = await insertAiDiagnosisCore(userId, data.scanId, context.rulesVerdict, {
       rootCause: ai.rootCause,
       reasoning: serializeAiReasoning(ai),
       confidence: ai.confidence,
     });
+    // S5 Decide: the AI row gets the same cost treatment as the rules row
+    // (family + midpoints + currency). attachCostsCore derives everything
+    // from the scan's codes + verdict, so the rows agree.
+    await attachCostsCore(userId, aiId);
     return { available: true, aiDiagnosis: ai };
   });

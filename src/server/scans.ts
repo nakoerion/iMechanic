@@ -38,6 +38,21 @@ export type PersistedDiagnosis = {
   reasons: string[];
   source: "rules";
   confidence: number;
+  /**
+   * S5 Decide fields — family + persisted band midpoints + full bands in
+   * the caller's market. The UI renders bands via formatMoneyRange with
+   * COST_ESTIMATE_NOTE; workshopRecommended is a safety routing (never a
+   * lock/badge/upsell).
+   */
+  repairFamily: import("../lib/cost").RepairFamily;
+  costDiyCents: number | null;
+  costShopCents: number | null;
+  currency: "EUR" | "GBP" | "ALL" | null;
+  diyLowCents: number;
+  diyHighCents: number;
+  shopLowCents: number;
+  shopHighCents: number;
+  workshopRecommended: boolean;
 };
 
 /** The AI root-cause row (diagnoses source='ai') — the Pro layer. */
