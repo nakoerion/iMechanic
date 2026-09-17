@@ -804,3 +804,39 @@ migration and does not change S6a's server functions (one additive field, below)
   the AI panel, the cost card, the guided-repair section, all 4 scans and the Pro
   status card with band B and the renewal date; zero console errors in either
   state (only the dev server's known Vite HMR websocket noise).
+
+## S6d — server-side entitlement enforcement (merged #18)
+
+S6b gated the Pro UI client-side only. S6d closes the server-side gap so a
+signed-in free user cannot bypass the paywall by calling server functions
+directly. All three changes reuse S6a's `hasActivePro` (no entitlement logic
+reinvented), and none touches the free tier (read codes / clear codes /
+plain-English meaning / rules verdict stay ungated and reachable).
+
+- **`getAiDiagnosis`** (`src/server/ai.ts`) now requires Pro, checked FIRST —
+  before the idempotency read and before any Anthropic call, so a refused
+  request costs nothing and writes nothing. A signed-in free user gets the
+  honest `{ available: false, reason }` shape with the new
+  `REASON_NOT_ENTITLED` ("AI root cause is part of iMechanic Pro…"); the
+  key-missing / network / parse / no-credits fallbacks are unchanged. Pure
+  helper `aiEntitlementRefusal()` in `src/server/ai-core.ts`.
+- **`createVehicle`** (`src/server/scans.ts`) enforces the free 1-vehicle limit
+  at the write via `vehicleCreateGate(pro, heldVehicles)`; the refusal is an
+  Error whose message is `APP_COPY.pro.vehicleLimitRefusal`, shown verbatim by
+  the UI. Pro unaffected.
+- **`listScans` / `listVehicles`** now return `PlanPage<T> =
+  { visible, hiddenCount, limited, total }` instead of a bare array: a free user
+  gets at most 3 scans / 1 vehicle over the wire, Pro gets everything.
+  Truncation is never silent — `hiddenCount` feeds the "N older scans are saved
+  but not shown" note, and `total` (from new `countScansCore`/`countVehiclesCore`)
+  means a read capped at `SCAN_HISTORY_LIMIT=50` no longer understates what is
+  saved. Screens read the page through `readPlanPage` and no longer slice lists
+  themselves; the boundary lives once in `src/lib/pro-limits.ts`.
+
+Verification: `bunx tsc --noEmit` → 0 errors; `bun run build` clean; `bun run
+test` → **152 passed / 16 skipped** (+20 new pure tests in `tests/ai.test.ts`
+and `tests/pro-limits.test.ts`; the same 3 DB suites abort on the missing
+`TEST_DATABASE_URL`). No browser pass was run in this slice — the screens were
+verified by tsc/build/unit tests only; QA must load `/app/history`,
+`/app/vehicles` and `/app/scan` for both a free and a Pro session before
+publishing.
