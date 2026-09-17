@@ -20,6 +20,20 @@ function stripeConfigured(): boolean {
 }
 
 /**
+ * True when the configured key is a Stripe TEST key. Added in S6b because the
+ * upgrade screen has to be honest about whether pressing Upgrade can take a real
+ * payment: with a test key the checkout page is Stripe's test checkout and no
+ * money moves, and the UI says exactly that. Anything unrecognised — including
+ * a live key — reports false, so the app never claims "test mode" it cannot
+ * prove. The key itself is never returned, only this boolean.
+ */
+function stripeTestMode(): boolean {
+  const key = process.env.STRIPE_SECRET_KEY?.trim() ?? "";
+  if (key.startsWith("sk_live_") || key.startsWith("rk_live_")) return false;
+  return key.includes("_test_");
+}
+
+/**
  * Start a Stripe Checkout Session (subscription mode) for one of the three
  * annual bands and return the hosted URL for the client to redirect to.
  *
@@ -58,6 +72,13 @@ export const getEntitlement = createServerFn({ method: "GET" }).handler(
   async () => {
     const { getEntitlementCore } = await import("./pro-core");
     const entitlement = await getEntitlementCore();
-    return { ...entitlement, stripeConfigured: stripeConfigured() };
+    return {
+      ...entitlement,
+      stripeConfigured: stripeConfigured(),
+      /* S6b added this field (additive — S6a's fields are unchanged) so the
+         upgrade UI can say "test mode, no card is charged" only when that is
+         actually true. */
+      stripeTestMode: stripeTestMode(),
+    };
   }
 );

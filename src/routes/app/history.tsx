@@ -8,9 +8,12 @@ import {
   ScanIcon,
   SpinnerIcon,
 } from "../../components/icons";
+import { ProUpgradePrompt } from "../../components/pro/pro-prompt";
 import { Button, buttonClasses } from "../../components/ui/button";
 import { SeverityBadge } from "../../components/ui/severity-badge";
 import { APP_COPY } from "../../lib/copy";
+import { useEntitlement } from "../../lib/entitlement";
+import { visibleScans } from "../../lib/pro-limits";
 import type { Severity } from "../../lib/severity";
 import {
   listScans,
@@ -60,6 +63,13 @@ function formatWhen(iso: string): string {
 function AppHistory() {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [attempt, setAttempt] = useState(0);
+  /* S6b: free keeps the 3 most recent scans. The limit is applied to the list
+     this screen already loads — no server change — and the hidden count is
+     always disclosed below the list. */
+  const entitlement = useEntitlement();
+  const pro =
+    entitlement.state.kind === "ready" && entitlement.state.entitlement.pro;
+  const listed = state.kind === "ready" ? visibleScans(state.scans, pro) : null;
 
   useEffect(() => {
     let cancelled = false;
@@ -134,12 +144,23 @@ function AppHistory() {
         />
       )}
 
-      {state.kind === "ready" && state.scans.length > 0 && (
-        <ul className="space-y-3">
-          {state.scans.map((scan) => (
-            <ScanRow key={scan.id} scan={scan} />
-          ))}
-        </ul>
+      {state.kind === "ready" && state.scans.length > 0 && listed && (
+        <>
+          <ul className="space-y-3">
+            {listed.visible.map((scan) => (
+              <ScanRow key={scan.id} scan={scan} />
+            ))}
+          </ul>
+          {/* The plan limit, said out loud: the free tier shows the 3 most
+              recent scans and this card says so — a shortening list is never
+              left for the user to notice. */}
+          {listed.limited && (
+            <ProUpgradePrompt
+              title={APP_COPY.pro.historyTitle}
+              description={APP_COPY.pro.historyBody(listed.hiddenCount)}
+            />
+          )}
+        </>
       )}
     </div>
   );

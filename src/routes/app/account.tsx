@@ -1,10 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Card, ScreenHeader } from "../../components/app-shell";
-import { CheckIcon } from "../../components/icons";
+import { CheckIcon, InfoIcon } from "../../components/icons";
 import { Button } from "../../components/ui/button";
 import { ThemeControl } from "../../components/ui/theme-control";
+import { FreePlanCard, ProStatusCard } from "../../components/pro/pro-plan";
 import { APP_COPY } from "../../lib/copy";
+import { useEntitlement, type EntitlementHandle } from "../../lib/entitlement";
 import { MARKET_LIST, type CountryCode } from "../../lib/market";
 import { clientSignOutAndClearCache } from "../../lib/session";
 import {
@@ -14,7 +16,16 @@ import {
 
 type AuthUser = { id: string; email: string; country: CountryCode | null };
 
+/** Only the two values S6a's checkout redirect builds are accepted. */
+type AccountSearch = { checkout?: "success" | "canceled" };
+
 export const Route = createFileRoute("/app/account")({
+  validateSearch: (search: Record<string, unknown>): AccountSearch => {
+    const value = search.checkout;
+    return {
+      checkout: value === "success" || value === "canceled" ? value : undefined,
+    };
+  },
   component: AppAccount,
 });
 
@@ -23,6 +34,8 @@ function AppAccount() {
   const [country, setCountry] = useState<CountryCode | "">("");
   const [countryState, setCountryState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [signingOut, setSigningOut] = useState(false);
+  const { checkout } = Route.useSearch();
+  const entitlement = useEntitlement();
 
   useEffect(() => {
     let cancelled = false;
@@ -39,6 +52,23 @@ function AppAccount() {
       cancelled = true;
     };
   }, []);
+
+  /**
+   * Returning from Stripe Checkout. The note below is just a note — the plan
+   * shown on this page comes from `getEntitlement()`, never from the URL, so a
+   * hand-typed `?checkout=success` cannot make the app claim Pro.
+   *
+   * On success the webhook may land a moment after the browser redirect, so we
+   * ask again immediately and once more shortly after, rather than declaring
+   * the outcome either way.
+   */
+  const { reload } = entitlement;
+  useEffect(() => {
+    if (checkout !== "success") return;
+    reload();
+    const timer = setTimeout(reload, 3000);
+    return () => clearTimeout(timer);
+  }, [checkout, reload]);
 
   async function onCountryChange(next: string) {
     if (next !== "DE" && next !== "GB" && next !== "AL") return;
@@ -114,10 +144,33 @@ function AppAccount() {
   return (
     <div className="space-y-6">
       <ScreenHeader title={APP_COPY.account.title} description={APP_COPY.account.description} />
+
+      {/* Returning from Stripe Checkout. These notes never assert an
+          entitlement — the plan block right below reads the real status. */}
+      {checkout === "success" && (
+        <p
+          role="status"
+          className="flex items-start gap-2 rounded-card border border-line bg-surface p-4 text-sm leading-relaxed text-fg-muted"
+        >
+          <InfoIcon className="mt-0.5 h-4 w-4 shrink-0 text-brand-strong" aria-hidden />
+          {APP_COPY.account.checkoutSuccess}
+        </p>
+      )}
+      {checkout === "canceled" && (
+        <p
+          role="status"
+          className="flex items-start gap-2 rounded-card border border-line bg-surface p-4 text-sm leading-relaxed text-fg-muted"
+        >
+          <InfoIcon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          {APP_COPY.account.checkoutCanceled}
+        </p>
+      )}
+
       <Card>
         <h2 className="text-sm font-bold text-fg">{APP_COPY.account.currentEmailLabel}</h2>
         <p className="mt-1 text-base font-semibold text-fg">{user.email}</p>
       </Card>
+      <PlanSection entitlement={entitlement} />
       <Card>
         <h2 className="text-sm font-bold text-fg">{APP_COPY.account.countryHeading}</h2>
         <p className="mt-1 text-xs leading-relaxed text-fg-subtle">
@@ -171,6 +224,46 @@ function AppAccount() {
       </Card>
     </div>
   );
+}
+
+/**
+ * The plan block (S6b). Three states, all driven by `getEntitlement()`:
+ * Pro → the live subscription status; free → the free-plan card with the way to
+ * upgrade; loading/unknown → an honest note rather than a guess.
+ */
+function PlanSection({ entitlement }: { entitlement: EntitlementHandle }) {
+  const a = APP_COPY.account;
+  const { state, reload } = entitlement;
+
+  if (state.kind === "loading") {
+    return (
+      <Card>
+        <h2 className="text-sm font-bold text-fg">{a.planHeading}</h2>
+        <p className="mt-1 text-sm text-fg-muted">{a.planLoading}</p>
+      </Card>
+    );
+  }
+
+  if (state.kind === "error") {
+    return (
+      <Card>
+        <h2 className="text-sm font-bold text-fg">{a.planHeading}</h2>
+        <p className="mt-1 text-sm leading-relaxed text-fg-muted">
+          {a.planUnavailable}
+        </p>
+        <Button variant="secondary" size="sm" className="mt-3" onClick={reload}>
+          {a.planRetry}
+        </Button>
+      </Card>
+    );
+  }
+
+  if (state.entitlement.pro) {
+    return <ProStatusCard entitlement={entitlement} />;
+  }
+
+  const status = state.entitlement.status;
+  return <FreePlanCard statusNote={status ? a.planStatus[status] : null} />;
 }
 
 function FreeForeverNote() {
