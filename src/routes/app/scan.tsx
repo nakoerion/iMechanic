@@ -19,7 +19,7 @@ import { normaliseDtc } from "../../lib/dtc";
 import type { Severity } from "../../lib/severity";
 import { DemoDriver } from "../../obd/demo-simulator";
 import { browserCapabilities } from "../../obd/driver";
-import type { ObdScanResult } from "../../obd/driver";
+import type { ObdCapabilities, ObdScanResult } from "../../obd/driver";
 import { LiveElmDriver, type LiveConnectChoice } from "../../obd/elm327-live";
 import {
   createVehicle,
@@ -74,9 +74,7 @@ function AppScan() {
   const [manualCode, setManualCode] = useState("");
   const [manualInvalid, setManualInvalid] = useState(false);
 
-  const [caps, setCaps] = useState<{ bluetooth: boolean; serial: boolean } | null>(
-    null,
-  );
+  const [caps, setCaps] = useState<ObdCapabilities | null>(null);
   const [liveBusy, setLiveBusy] = useState<LiveConnectChoice | null>(null);
 
   const [cleared, setCleared] = useState(false);
@@ -265,7 +263,7 @@ function AppScan() {
   }
 
   const liveUnavailable =
-    caps !== null && !caps.bluetooth && !caps.serial;
+    caps !== null && !caps.bluetooth && !caps.serial && !caps.native;
 
   return (
     <div className="space-y-6">
@@ -371,6 +369,26 @@ function AppScan() {
               </div>
             ) : (
               <div className="mt-3 grid gap-2">
+                {caps?.native && (
+                  <>
+                    {/* The app's own bridge (S7). On iPhone this is the only
+                        live transport there is — iOS Safari has no Web
+                        Bluetooth — so it is offered first and explained
+                        rather than presented as a mysterious extra button. */}
+                    <Button
+                      variant="secondary"
+                      fullWidth
+                      loading={liveBusy === "native"}
+                      loadingLabel={t.liveConnecting}
+                      onClick={() => void onLiveConnect("native")}
+                    >
+                      {t.liveConnectNative}
+                    </Button>
+                    <p className="text-xs leading-relaxed text-fg-subtle">
+                      {t.liveNativeNote}
+                    </p>
+                  </>
+                )}
                 {caps?.bluetooth && (
                   <Button
                     variant="secondary"
