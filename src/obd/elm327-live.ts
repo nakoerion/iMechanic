@@ -1,5 +1,6 @@
 /**
- * Live ELM327 driver (Slice S3) — Web Bluetooth + Web Serial, best effort.
+ * Live ELM327 driver (Slice S3) — Web Bluetooth + Web Serial + the native BLE
+ * bridge (Slice S7), best effort.
  *
  * Client-side ONLY. Never import into a server function (browser globals).
  *
@@ -10,7 +11,15 @@
  * Codes: service 03 (stored), 07 (pending), 0A (permanent).
  * Clear:  service 04 (CLRDTC). Free forever — the UI never gates it.
  *
- * Where neither transport exists (iOS Safari), the scan screen reads
+ * Three transports, one interface:
+ *   "bluetooth" — Web Bluetooth (Android Chrome, desktop Chrome/Edge).
+ *   "serial"    — Web Serial (desktop Chrome/Edge over a USB adapter).
+ *   "native"    — the `iMechanicBle` bridge inside the Capacitor iOS/Android
+ *                 shell. Required on iPhone: iOS Safari has no Web Bluetooth
+ *                 at all, so CoreBluetooth is the only way to reach a real
+ *                 adapter there. See `src/native/ble-bridge.ts`.
+ *
+ * Where none of the three exists the scan screen reads
  * `browserCapabilities()` and shows an honest unavailable state instead of
  * ever constructing one of these. When constructed without hardware the
  * connect step fails with an ObdError — never a fabricated scan.
@@ -53,6 +62,13 @@ type SerialPortLike = {
 };
 
 import { ObdError, parseDtcResponseText, parseVinResponseText } from "../lib/dtc";
+import {
+  BleBridgeError,
+  loadBleBridge,
+  pickAdapterDevice,
+  toBleError,
+  type IMechanicBleBridge,
+} from "../native/ble-bridge";
 import type { ObdDriver, ObdScanResult, ObdTranscript, ObdTranscriptEntry } from "./driver";
 
 /**
@@ -78,9 +94,12 @@ const BLE_CANDIDATES: Array<{ service: string; characteristic: string }> = [
 
 const READ_TIMEOUT_MS = 8_000;
 const WRITE_CHUNK_DELAY_MS = 30;
+/** How long to look for OBD adapters before reporting that none answered. */
+const NATIVE_SCAN_TIMEOUT_MS = 12_000;
 
-type LineTransport = {
-  kind: "bluetooth" | "serial";
+/** One line-level transport over an ELM327 link. Exported for the S7 tests. */
+export type LineTransport = {
+  kind: "bluetooth" | "serial" | "native";
   name: string;
   writeLine(line: string): Promise<void>;
   readUntilPrompt(timeoutMs?: number): Promise<string>;
@@ -260,7 +279,12 @@ function serialTransport(port: SerialPortLike, name: string): LineTransport {
   };
 }
 
-export type LiveConnectChoice = "bluetooth" | "serial";
+/**
+ * The three live transports. "native" is the app's own BLE bridge and is only
+ * offered inside the Capacitor shell (see `browserCapabilities().native`), so
+ * the scan screen never presents a choice that cannot work.
+ */
+export type LiveConnectChoice = "bluetooth" | "serial" | "native";
 
 /**
  * The real adapter. Construct with an explicit transport choice — the scan
@@ -310,7 +334,9 @@ export class LiveElmDriver implements ObdDriver {
     this.transport =
       this.choice === "bluetooth"
         ? await connectBluetooth()
-        : await connectSerial();
+        : this.choice === "serial"
+          ? await connectSerial()
+          : await connectNativeBle();
     this.transcriptLog = [];
     // ELM327 handshake: reset, echo off, headers off, then prove the car answers.
     const replies: Record<string, string> = {};
@@ -437,4 +463,234 @@ async function connectSerial(): Promise<LineTransport> {
 
 function liveHint(): string | null {
   return "Demo mode works everywhere with no hardware, or type a code in manually.";
+}
+
+/* ------------------------------------------------------------------ *
+ * Native BLE transport (Slice S7) — the Capacitor iOS/Android bridge
+ * ------------------------------------------------------------------ */
+
+/**
+ * The slice of the bridge the line transport actually needs. Kept separate so
+ * the transport can be exercised with a fake bridge in tests — no phone, no
+ * Capacitor, no car.
+ */
+export type NativeBleWriteBridge = Pick<
+  IMechanicBleBridge,
+  "write" | "disconnect"
+>;
+
+/** Belt-and-braces guard: even a broken native side must not hang the UI. */
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  onTimeout: () => ObdError,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(onTimeout()), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
+
+/**
+ * Byte-level line transport over the app's own native BLE bridge.
+ *
+ * The bridge's `write()` already round-trips one command to the adapter's
+ * reply, so `writeLine()` performs that exchange and `readUntilPrompt()`
+ * hands the buffered answer back — the same write-then-read order the web
+ * transports use, which keeps the ELM327 driver identical across all three.
+ *
+ * A reply that arrived without the ELM327 prompt (`complete: false`) is
+ * reported as a lost link, never as a successful read: an empty answer parsed
+ * as "no codes" would be a fabricated scan.
+ */
+export function nativeBleTransport(
+  bridge: NativeBleWriteBridge,
+  device: { deviceId: string; name: string | null },
+  options: { timeoutMs?: number } = {},
+): LineTransport {
+  const timeoutMs = options.timeoutMs ?? READ_TIMEOUT_MS;
+  let pending: Promise<{ response: string; complete: boolean }> | null = null;
+  let closed = false;
+
+  const lostLink = () =>
+    new ObdError(
+      "The adapter stopped answering mid-scan.",
+      "Keep the adapter plugged in with the ignition on and try connecting again.",
+    );
+
+  return {
+    kind: "native",
+    name: device.name ?? device.deviceId,
+
+    async writeLine(line: string) {
+      if (closed) {
+        throw new ObdError("The adapter is not connected.", liveHint());
+      }
+      const roundTrip = withTimeout(
+        bridge.write({ command: line, timeoutMs }),
+        // Slightly longer than the native timeout, so the native (more
+        // specific) error wins whenever the native side is healthy.
+        timeoutMs + 2_000,
+        lostLink,
+      );
+      pending = roundTrip;
+      try {
+        await roundTrip;
+      } catch (err) {
+        pending = null;
+        throw nativeBleError(err);
+      }
+    },
+
+    async readUntilPrompt() {
+      const roundTrip = pending;
+      pending = null;
+      if (!roundTrip) {
+        throw new ObdError("No command is waiting for a reply.", liveHint());
+      }
+      let result: { response: string; complete: boolean };
+      try {
+        result = await roundTrip;
+      } catch (err) {
+        throw nativeBleError(err);
+      }
+      if (!result.complete) throw lostLink();
+      return result.response;
+    },
+
+    async close() {
+      closed = true;
+      pending = null;
+      await bridge.disconnect().catch(() => undefined);
+    },
+  };
+}
+
+/** Turn a bridge failure into the driver's user-facing error + hint. */
+function nativeBleError(err: unknown): ObdError {
+  if (err instanceof ObdError) return err;
+  const failure = toBleError(err);
+  switch (failure.code) {
+    case "NOT_NATIVE":
+    case "PLUGIN_UNAVAILABLE":
+      return new ObdError(
+        "The app's Bluetooth bridge is not available in this build.",
+        liveHint(),
+      );
+    case "NOT_SUPPORTED":
+      return new ObdError(
+        "This phone has no usable Bluetooth LE radio.",
+        "Turn Bluetooth on and try again — or use demo mode, which needs no hardware.",
+      );
+    case "PERMISSION_DENIED":
+      return new ObdError(
+        "iMechanic is not allowed to use Bluetooth.",
+        "Allow Bluetooth for iMechanic in your phone's settings, then try again.",
+      );
+    case "PERMISSION_PENDING":
+      return new ObdError(
+        "iMechanic is still waiting for Bluetooth permission.",
+        "Tap Allow on the Bluetooth prompt, then try connecting again.",
+      );
+    case "NO_DEVICE":
+      return new ObdError(
+        "No Bluetooth OBD adapter was found.",
+        "Plug the adapter into the OBD2 port, switch the ignition on, keep it near the phone, then try again.",
+      );
+    case "NOT_CONNECTED":
+      return new ObdError("The adapter is not connected.", liveHint());
+    case "TIMEOUT":
+      return new ObdError(
+        "The adapter stopped answering mid-scan.",
+        "Keep the adapter plugged in with the ignition on and try connecting again.",
+      );
+    case "DISCONNECTED":
+      return new ObdError(
+        "The adapter's Bluetooth link dropped.",
+        "Bring the phone back near the adapter and try connecting again.",
+      );
+    case "CONNECT_FAILED":
+      return new ObdError(
+        "Could not open the adapter's Bluetooth link.",
+        "Some cheap clones must be paired in the phone's Bluetooth settings first. If another app is already connected to the adapter, close it and try again.",
+      );
+    default:
+      return new ObdError(failure.message, liveHint());
+  }
+}
+
+/**
+ * How many times we ask the native bridge for a permission decision. iOS
+ * answers `requestPermissions` honestly: "prompt" means **the system dialog is
+ * still on screen**, not "granted". Treating "prompt" as consent used to send
+ * us straight into `scan()`, which could only fail with "Bluetooth is switched
+ * off" — a confusing error that blamed the user's radio for a permission the
+ * user had not answered yet.
+ *
+ * Asking again re-reads the OS state, so an answer that lands while we wait is
+ * picked up immediately. Bounded, so the connect step can never hang.
+ */
+const NATIVE_PERMISSION_ATTEMPTS = 3;
+/** Pause between asks: long enough to be a real wait, short enough to stay alive. */
+const NATIVE_PERMISSION_RETRY_MS = 1_500;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Resolve a native Bluetooth permission to "granted", or fail with the honest
+ * reason: denied, no radio, or still unanswered after the final ask. Never
+ * reports a pending prompt as a decision either way.
+ */
+async function awaitNativeBlePermission(bridge: IMechanicBleBridge): Promise<void> {
+  for (let attempt = 1; attempt <= NATIVE_PERMISSION_ATTEMPTS; attempt += 1) {
+    const { bluetooth } = await bridge.requestPermissions();
+    if (bluetooth === "granted") return;
+    if (bluetooth === "denied") {
+      throw new BleBridgeError("PERMISSION_DENIED", "Bluetooth permission denied");
+    }
+    if (bluetooth === "unsupported") {
+      throw new BleBridgeError("NOT_SUPPORTED", "No Bluetooth LE radio");
+    }
+    if (attempt < NATIVE_PERMISSION_ATTEMPTS) await delay(NATIVE_PERMISSION_RETRY_MS);
+  }
+  throw new BleBridgeError(
+    "PERMISSION_PENDING",
+    "The Bluetooth permission prompt is still waiting for an answer.",
+  );
+}
+
+/**
+ * Permission → scan → connect through the native bridge, returning the line
+ * transport the driver then drives. Every failure is an ObdError whose copy
+ * matches the failure (never a generic "something went wrong"), and nothing
+ * here can hang or invent an answer.
+ */
+async function connectNativeBle(): Promise<LineTransport> {
+  let bridge: IMechanicBleBridge;
+  try {
+    bridge = await loadBleBridge();
+  } catch (err) {
+    throw nativeBleError(err);
+  }
+  try {
+    await awaitNativeBlePermission(bridge);
+    const { devices } = await bridge.scan({ timeoutMs: NATIVE_SCAN_TIMEOUT_MS });
+    const device = pickAdapterDevice(devices);
+    if (!device) throw new BleBridgeError("NO_DEVICE", "No adapter found");
+    await bridge.connect({ deviceId: device.deviceId });
+    return nativeBleTransport(bridge, device);
+  } catch (err) {
+    throw nativeBleError(err);
+  }
 }

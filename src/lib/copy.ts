@@ -158,6 +158,9 @@ export const APP_COPY = {
       "Plug in your ELM327 adapter, switch the ignition on (engine can stay off), then connect.",
     liveConnectBluetooth: "Connect over Bluetooth",
     liveConnectSerial: "Connect over USB",
+    liveConnectNative: "Connect over Bluetooth (app)",
+    liveNativeNote:
+      "Uses the app's own Bluetooth bridge — that is what makes a real adapter work on iPhone, where the browser has no Bluetooth of its own.",
     liveConnecting: "Connecting…",
     liveReading: "Reading codes…",
     liveUnavailableTitle: "Live connect isn't available in this browser",

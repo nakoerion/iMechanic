@@ -7,15 +7,17 @@
  * cares where the data came from:
  *
  *   - `demo-simulator.ts` — simulated ELM327, always available, no hardware.
- *   - `elm327-live.ts`    — the real ELM327 driver (Web Bluetooth + Web
- *                           Serial). iOS Safari supports neither — the scan
- *                           screen says so honestly instead of failing.
+ *   - `elm327-live.ts`    — the real ELM327 driver over Web Bluetooth, Web
+ *                           Serial, or the Capacitor native BLE bridge
+ *                           (slice S7). iOS Safari supports none of the web
+ *                           transports — the scan screen offers the native one
+ *                           there and says so honestly instead of failing.
  *   - manual entry needs no driver: the scan screen sends a single typed
  *     code to the server, which persists it as `source: 'manual'`.
  */
 
 import type { DtcStatus } from "./dtc";
-
+import { isNativeRuntime } from "../native/runtime";
 export type { DtcStatus } from "./dtc";
 
 /** One code read from the adapter, in ready-to-persist shape. */
@@ -44,7 +46,7 @@ export type ObdTranscriptEntry = {
  * Live-driver-specific: manual entry and demo have no adapter to transcribe.
  */
 export type ObdTranscript = {
-  transport: "bluetooth" | "serial";
+  transport: "bluetooth" | "serial" | "native";
   /** Adapter identity string (device / port name). OBD traffic only. */
   adapter: string;
   entries: ObdTranscriptEntry[];
@@ -63,6 +65,12 @@ export type ObdScanResult = {
 export type ObdCapabilities = {
   bluetooth: boolean;
   serial: boolean;
+  /**
+   * The app's own native BLE bridge (slice S7) — true only inside the
+   * Capacitor iOS/Android shell. This is the only live transport on iPhone,
+   * because iOS Safari has no Web Bluetooth at all.
+   */
+  native: boolean;
 };
 
 /** Everyone agrees on this shape: demo, live, and any future driver. */
@@ -82,13 +90,20 @@ export interface ObdDriver {
 export type ScanSource = "live" | "demo" | "manual";
 
 /**
- * Browser transport support, evaluated lazily so server-side rendering never
- * touches `navigator`. Android Chrome exposes Web Bluetooth; desktop
- * Chrome/Edge expose Web Serial; iOS Safari exposes neither — the scan
- * screen shows an honest "not available in this browser" state there.
+ * Transport support, evaluated lazily so server-side rendering never touches
+ * `navigator`. Android Chrome exposes Web Bluetooth; desktop Chrome/Edge
+ * expose Web Serial; iOS Safari exposes neither. Inside the Capacitor shell
+ * `native` is true and the app's own BLE bridge carries the adapter instead —
+ * that is what makes a real scan possible on iPhone.
+ *
+ * The web checks are unchanged by S7: in a plain browser this returns exactly
+ * what it always did, plus `native: false`.
  */
 export function browserCapabilities(): ObdCapabilities {
-  if (typeof navigator === "undefined") return { bluetooth: false, serial: false };
+  const native = isNativeRuntime();
+  if (typeof navigator === "undefined") {
+    return { bluetooth: false, serial: false, native };
+  }
   const nav = navigator as Navigator & {
     bluetooth?: unknown;
     serial?: unknown;
@@ -96,6 +111,7 @@ export function browserCapabilities(): ObdCapabilities {
   return {
     bluetooth: typeof nav.bluetooth !== "undefined",
     serial: typeof nav.serial !== "undefined",
+    native,
   };
 }
 

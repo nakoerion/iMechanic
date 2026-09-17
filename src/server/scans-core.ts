@@ -581,6 +581,7 @@ export async function createVehicleCore(
  * Validate the live-scan transcript (R3). Returns a normalised copy or null.
  * Strictly bounded: at most 32 entries, each capped in length, so raw_json
  * stays a readable session log rather than an unbounded dump.
+ * `transport` is one of the three live transports (S7 added "native").
  */
 function validateTranscript(value: unknown): ObdTranscript | null {
   if (typeof value !== "object" || value === null) return null;
@@ -589,7 +590,9 @@ function validateTranscript(value: unknown): ObdTranscript | null {
     adapter?: unknown;
     entries?: unknown;
   };
-  if (transport !== "bluetooth" && transport !== "serial") return null;
+  if (transport !== "bluetooth" && transport !== "serial" && transport !== "native") {
+    return null;
+  }
   if (typeof adapter !== "string" || adapter.trim().length === 0) return null;
   if (!Array.isArray(entries) || entries.length > 32) return null;
   const clean: ObdTranscript["entries"] = [];

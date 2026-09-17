@@ -463,3 +463,81 @@ UI only: no backend/RPC, rules-engine, cost/repair-library, or paywall changes.
   no upsell language) and GuidedRepairPanel (heading + safety + checkboxes
   + guidance note) without crash; RepairJobSection import-checked. No new
   tests (no pure logic added).
+## S7 (engineer, branch s7-native-wrappers) — native wrappers + native BLE bridge
+Build artifacts only, per APP_SPEC line 76. No store submission, no S6/Stripe,
+no rules-engine or cost/repair changes. **Nothing here is compiled**: this box
+has no macOS/Xcode and no Android SDK, so the native sources are complete,
+internally consistent and compile-*ready*, not compile-*verified*.
+- **Capacitor 7 wiring** — `@capacitor/core@^7` (runtime dep), `@capacitor/cli`,
+  `@capacitor/ios`, `@capacitor/android@^7` (devDeps). `capacitor.config.ts`:
+  `appId: "app.imechanic"` **PLACEHOLDER** (owner must confirm before store
+  submission — it is the permanent bundle id), `appName: "iMechanic"`,
+  `webDir: "native/www"`, `server.url` = deployed origin (default
+  `https://www.imechanic.app`, overridable with `CAPACITOR_SERVER_URL`),
+  `server.errorPath: "offline.html"`, `cleartext: false`, plugin tunables
+  (`scanTimeoutMs` 12s / `commandTimeoutMs` 8s / `connectTimeoutMs` 15s).
+  The web app is server-rendered, so the shell loads the deployed origin;
+  `webDir` is the bundle + offline fallback.
+- **Scaffolds in the repo** — `ios/` and `android/` generated with
+  `npx cap add` (both succeeded on Linux; `cap add ios` does not need Xcode).
+  `cap sync` for iOS still needs CocoaPods/macOS.
+- **webDir = `native/www`** — committed `index.html` (honest "bundled shell"
+  page) + `offline.html` (shown when the origin is unreachable) + `app/`
+  (gitignored, filled by `bun run native:prepare` = copy `dist/client` + write
+  a hand-off `index.html`). Scripts added: `native:prepare`, `native:copy`,
+  `native:sync` (build + prepare + `cap sync`).
+- **JS contract `src/native/ble-bridge.ts`** — `IMechanicBleBridge`
+  (`requestPermissions`, `scan`, `connect`, `write`, `disconnect`, `getStatus`,
+  `connectionStateChange` event), `BleBridgeError` with codes
+  (NOT_NATIVE | PLUGIN_UNAVAILABLE | NOT_SUPPORTED | PERMISSION_DENIED |
+  NO_DEVICE | NOT_CONNECTED | CONNECT_FAILED | TIMEOUT | DISCONNECTED |
+  INVALID_ARGUMENT | UNKNOWN), `pickAdapterDevice` (name hints > signal, pure),
+  `loadBleBridge()` which **lazily** imports `@capacitor/core` so the web
+  bundle never carries Capacitor.
+- **Runtime detection `src/native/runtime.ts`** — sync, SSR-safe read of the
+  injected `window.Capacitor`; `isNativeRuntime()`, `nativePlatform()`,
+  `isBlePluginAvailable()`. Never throws.
+- **Driver integration** — `ObdCapabilities` gains `native: boolean`;
+  `browserCapabilities()` is unchanged for `bluetooth`/`serial` and reports
+  `native: isNativeRuntime()`. `LiveConnectChoice` and `LineTransport.kind` gain
+  `"native"`; `ObdTranscript.transport` gains `"native"` (and
+  `validateTranscript` in `scans-core.ts` accepts it). `elm327-live.ts` adds
+  `nativeBleTransport()` (injectable bridge, write→read with prompt-completeness
+  check + JS watchdog so it can never hang) and `connectNativeBle()`
+  (permission → scan → `pickAdapterDevice` → connect), with honest
+  `nativeBleError()` copy. Scan screen shows a third button
+  (`liveConnectNative` / `liveNativeNote` in `copy.ts`) only when
+  `caps.native`, and `liveUnavailable` now accounts for it.
+- **iOS plugin** — `ios/App/App/Plugins/IMechanicBlePlugin.swift`
+  (CoreBluetooth; `CAPBridgedPlugin`; scan with no service filter, service
+  candidates FFE0/FFF0/FF00/FFE5, TX/RX chosen by properties, prompt-based
+  `write` round trip, per-op timeouts, permission await, all codes).
+  Registered by `ios/App/App/IMechanicBridgeViewController.swift`
+  (`capacitorDidLoad()` → `bridge?.registerPluginInstance(...)`); the
+  storyboard's view controller now points at that subclass. Both Swift files
+  are wired into `App.xcodeproj/project.pbxproj` (file refs + Plugins group +
+  Sources phase). `Info.plist` gains `NSBluetoothAlwaysUsageDescription` +
+  `NSBluetoothPeripheralUsageDescription`.
+- **Android plugin** — `android/app/src/main/java/app/imechanic/ble/
+  IMechanicBlePlugin.kt` (`@CapacitorPlugin(name = "iMechanicBle")`,
+  BluetoothLeScanner + GATT, CCCD write so notifications actually arrive,
+  API-level branches for descriptor/characteristic writes, all codes).
+  Registered in `MainActivity.kt` (`registerPlugin(...)` before
+  `super.onCreate`; the Java file was replaced). Manifest gains
+  BLUETOOTH(_ADMIN) + ACCESS_FINE_LOCATION capped at SDK 30,
+  BLUETOOTH_SCAN (`neverForLocation`) + BLUETOOTH_CONNECT, and
+  `uses-feature bluetooth_le required=false`. Kotlin Gradle plugin 2.0.21 added
+  (`variables.gradle`, `android/build.gradle`, `apply plugin: 'kotlin-android'`
+  + `kotlinOptions.jvmTarget = "21"` in `android/app/build.gradle`) — the
+  Capacitor template is Java-only.
+- **Docs** — `native/README.md`: the method table, how the plugin maps to the
+  ELM327 RX/TX characteristics, toolchains needed, `server.url` rationale,
+  appId placeholder status, store submission deferred, and an explicit
+  "not compiled here" note.
+- **Verification** — `bun run build` clean; `bun run test` → **96 passed / 16
+  skipped, 3 DB suites abort** with the TEST_DATABASE_URL message (expected);
+  the new `tests/native-ble.test.ts` (29 tests) covers runtime detection,
+  capability reporting, bridge loading, code mapping, adapter picking and the
+  native transport's round trip / lost-link / timeout paths. Still to do on a
+  machine with the toolchains: first native compile (Xcode + Android SDK), and
+  a real adapter round trip on a phone.
