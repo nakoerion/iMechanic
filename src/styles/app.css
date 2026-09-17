@@ -301,6 +301,55 @@
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* Landing-page motion — decorative only.                             */
+/*                                                                    */
+/* Two hard rules:                                                    */
+/*   1. everything sits inside `prefers-reduced-motion: no-preference` */
+/*      so a visitor who asked for stillness gets stillness;           */
+/*   2. content is NEVER hidden by default. The scroll reveals are     */
+/*      behind `@supports (animation-timeline: view())`, so a browser  */
+/*      without scroll-driven animations simply shows the content, and */
+/*      the on-load `.im-rise` animations use `both` on elements that  */
+/*      are painted in the first viewport anyway.                      */
+/* ------------------------------------------------------------------ */
+@keyframes im-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 0.85rem, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .im-rise {
+    animation: im-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .im-delay-1 {
+    animation-delay: 70ms;
+  }
+  .im-delay-2 {
+    animation-delay: 140ms;
+  }
+  .im-delay-3 {
+    animation-delay: 210ms;
+  }
+  .im-delay-4 {
+    animation-delay: 280ms;
+  }
+
+  @supports (animation-timeline: view()) {
+    .im-reveal {
+      animation: im-rise linear both;
+      animation-timeline: view();
+      animation-range: entry 5% entry 45%;
+    }
+  }
+}
+
 @layer utilities {
   .pt-safe {
     padding-top: env(safe-area-inset-top);
