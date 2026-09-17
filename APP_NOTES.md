@@ -561,3 +561,59 @@ internally consistent and compile-*ready*, not compile-*verified*.
   vehicle were deleted afterwards.
 - `bun run build` clean; `bun run test` 104 passed / 16 skipped with only the 3 DB
   suites aborting on the missing TEST_DATABASE_URL (unchanged baseline).
+
+## Typecheck clean — `bunx tsc --noEmit` exits 0 (fix/tsc-typecheck-clean)
+The repo's typecheck had drifted to ~60 errors across 9 files, which made
+`tsc --noEmit` useless as a gate (and it is not wired into `bun run build`,
+so nothing forced it back to green). All changes are type-level only: no
+runtime behaviour, query string, SQL or caller shape changed.
+- **Root cause (~45 errors) — `src/db.ts`.** `sql()` returned the raw Neon
+  handle (`NeonQueryFunction`), whose tagged-template call signature takes
+  NO type parameter, so every caller writing `db<RowType[]>\`...\`` failed
+  with TS2558 and the rows collapsed to `Record<string, any>`, cascading
+  into TS2345/TS2741 in `scans-core.ts`, `auth-core.ts` and `repair-core.ts`.
+  `sql()` now returns an exported `Sql` type — a generic tagged-template
+  function `<T = any>(strings, ...params) => Promise<T>` — that wraps
+  `neon(url)` and forwards the call untouched. The `DATABASE_URL is not set`
+  throw, the server-only module boundary and the module-load timing are all
+  identical; `T` still defaults to `any`, so an untyped `db\`...\`` behaves
+  exactly as before. Neon's other members (`.query`, `.unsafe`,
+  `.transaction`) are not part of the returned shape — nothing in `src/`
+  used them through `sql()` (only `tests/test-db.ts` calls `.query`, and it
+  builds its own `neon()` handle).
+- **Real latent shape bug found — `src/server/scans-core.ts`.** The
+  `dtc_catalog` read in `saveScanCore` was annotated `db<{code; title;
+  system; generic_cause; severity_default}>` — no `[]` — while
+  `catalogRows` is immediately `.map()`ed and `.filter()`ed. The generic was
+  missing its array wrapper, so the type said "one row" where the runtime
+  (and the code) deal in rows. Fixed the SHAPE only (added `[]`), not the
+  SQL. Nothing else needed a shape change: every other `db<...>` annotation
+  already matched its SELECT/RETURNING columns exactly.
+- **Independent fixes.** `src/obd/driver.ts` — `DtcStatus` lives in
+  `../lib/dtc`, there is no `src/obd/dtc`. `guided-repair-panel.tsx` —
+  `RepairFamily` is exported by `../../lib/cost` (`lib/repair.ts` re-imports
+  it as a type but does not re-export it). `routes/app/verify.tsx` — dropped
+  the unused `Button` import (`noUnusedLocals`). `routes/app/account.tsx` —
+  `user` is `AuthUser | null | "loading"`, so the country updater only
+  spreads it once it is really an object (before, a truthy `"loading"`
+  sentinel would have been spread into `{0:"l",...}` — the narrow fix also
+  removes that latent bug, and the branch is unreachable in practice because
+  the control only renders for a signed-in user). `server/ai-core.ts` — read
+  `.cause` off a value narrowed to `object` through an optional-property
+  cast, same truth test.
+- **`serve.ts` / Bun globals — deliberately NOT `@types/bun`.** Adding
+  `@types/bun` (or `"bun"` to tsconfig `types`) applies Bun's global set to
+  the WHOLE program next to `vite/client` + DOM, which risks new conflicts
+  in every file; the errors were confined to one file. Instead `serve.ts`
+  declares the tiny surface it uses — `import.meta.dir` (via a `declare
+  global { interface ImportMeta { dir: string } }`) plus `Bun.$`,
+  `Bun.serve`, `Bun.file`, `Bun.sleep` — as type-only declarations with the
+  `req` parameter typed as a `Request`. Trade-off: the declarations live in
+  `serve.ts` rather than in a shared types file, so a second Bun-global file
+  would need its own copy (or `@types/bun` then). No server behaviour
+  changed.
+- **Verification** — `bunx tsc --noEmit` → 0 errors (`EXIT=0`). `bun run
+  build` clean. `bun run test` → **104 passed / 16 skipped**, with only the
+  three DB suites (migrate/schema/obd) aborting on the missing
+  `TEST_DATABASE_URL` — unchanged baseline. PR: typecheck-only, no publish
+  needed since nothing about the served output changed.
