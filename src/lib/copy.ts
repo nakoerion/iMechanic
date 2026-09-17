@@ -61,7 +61,8 @@ export const APP_COPY = {
     confidenceLabel: "Confidence",
     rankedCausesLabel: "What to check first, in order",
     unavailableHeading: "AI diagnosis isn't available",
-    errorNote: "Something went wrong asking for the AI analysis — your free verdict above is unaffected. Try again.",
+    errorNote:
+      "Something went wrong asking for the AI analysis — your free verdict above is unaffected. Try again.",
   },
   decideAct: {
     decideHeading: "DIY or workshop?",
@@ -125,8 +126,7 @@ export const APP_COPY = {
       "If an account exists for that address, you'll get the link in a minute or two. It expires after 15 minutes.",
     sentNote:
       "No email? Check spam, or request a new link — but wait a minute first.",
-    sendError:
-      "We couldn't send the link just now — please try again.",
+    sendError: "We couldn't send the link just now — please try again.",
     requestAgain: "Request another link",
     invalidLinkTitle: "This sign-in link is broken or expired",
     invalidLinkDescription:
@@ -149,10 +149,12 @@ export const APP_COPY = {
     manualDescription:
       "Already read the code elsewhere? Type it in and it becomes a scan with one stored code.",
     manualLabelInput: "Fault code",
-    manualHint: "For example P0420 — one letter P, C, B or U plus four characters. Several codes at once works too: separate them with spaces or commas.",
+    manualHint:
+      "For example P0420 — one letter P, C, B or U plus four characters. Several codes at once works too: separate them with spaces or commas.",
     manualButton: "Save as scan",
     manualSaving: "Saving…",
-    manualInvalid: "That doesn't look like a fault code — check it and try again.",
+    manualInvalid:
+      "That doesn't look like a fault code — check it and try again.",
     liveHeading: "Connect your adapter",
     liveDescription:
       "Plug in your ELM327 adapter, switch the ignition on (engine can stay off), then connect.",
@@ -181,7 +183,8 @@ export const APP_COPY = {
     resultDemoBadge: "Demo scan — simulated data, not a real car",
     resultManualBadge: "Manual entry — typed in by you",
     resultLiveBadge: "Live scan — read from your adapter",
-    resultEmpty: "No fault codes found. The car reports a clean bill of health.",
+    resultEmpty:
+      "No fault codes found. The car reports a clean bill of health.",
     resultVinLabel: "VIN reported",
     resultSavedNote: "Saved to your history.",
     clearButton: "Clear codes",
@@ -193,16 +196,49 @@ export const APP_COPY = {
       "Clearing without fixing the fault hides the problem rather than solving it — if the fault is still there, the light may come back.",
     clearReadinessNote:
       "Clearing also resets the car's readiness monitors. Before an emissions or roadworthiness inspection (TÜV / MOT), the car needs a drive cycle for the monitors to report ready again, or it may not pass.",
-    clearDemoNote: "This resets the simulated demo adapter — it touches no real car.",
+    clearDemoNote:
+      "This resets the simulated demo adapter — it touches no real car.",
     clearFreeNote: "Free, always — no pay-to-clear, ever.",
     clearing: "Clearing…",
     cleared: "Clear request sent. Re-scan to confirm the codes are gone.",
-    clearError: "Clearing didn't go through — your codes are untouched. Try again.",
-    clearManualNote: "Only a connected car can be cleared — a typed code has nothing on the car to erase.",
+    clearError:
+      "Clearing didn't go through — your codes are untouched. Try again.",
+    clearManualNote:
+      "Only a connected car can be cleared — a typed code has nothing on the car to erase.",
     saveError: "We couldn't save that scan — nothing was stored. Try again.",
     latestHeading: "Last scan",
     newScanButton: "Start a new scan",
     newScanRunning: "Starting…",
+  },
+  history: {
+    title: "History",
+    description: "Every scan you run, with the verdict it got.",
+    /* The list is real data now (phase 2a) — these strings must never imply
+       that anything is still "coming". An empty list is simply empty. */
+    emptyEyebrow: "Empty",
+    emptyTitle: "No scans yet",
+    emptyDescription:
+      "Run a scan — live from an adapter, the demo, or a code typed in by hand — and it lands here automatically with its verdict.",
+    emptyAction: "Start a scan",
+    errorTitle: "We couldn't load your history",
+    errorDescription:
+      "Your scans are still saved — this screen just couldn't read them. Try again.",
+    retry: "Try again",
+    loading: "Loading your scans…",
+    /* Source badges: a demo scan is ALWAYS labelled demo. Never presented
+       as a real reading from a car. */
+    sourceLive: "Live scan",
+    sourceDemo: "Demo — simulated data",
+    sourceManual: "Manual entry",
+    noCodes: "No fault codes found — a clean scan.",
+    unknownCode: "Not in our catalog",
+    moreCodes: (n: number) => `+${n} more code${n === 1 ? "" : "s"}`,
+    countLabel: (n: number) => `${n} code${n === 1 ? "" : "s"}`,
+    dateUnknown: "Date unknown",
+    justNow: "Just now",
+    minutesAgo: (n: number) => `${n} min ago`,
+    hoursAgo: (n: number) => `${n} hour${n === 1 ? "" : "s"} ago`,
+    daysAgo: (n: number) => `${n} day${n === 1 ? "" : "s"} ago`,
   },
   account: {
     title: "Account",
