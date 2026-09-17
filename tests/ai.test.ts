@@ -8,9 +8,11 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  aiEntitlementRefusal,
   buildAiPrompt,
   parseAiResponseBody,
   REASON_NOT_CONFIGURED,
+  REASON_NOT_ENTITLED,
   REASON_UNAVAILABLE,
   runAiDiagnosis,
   serializeAiReasoning,
@@ -198,5 +200,36 @@ describe("serializeAiReasoning round-trip shape", () => {
     expect(text).toContain("Likely a coil.");
     expect(text).toContain("Because reasons.");
     expect(text).toContain("- Coil (78%)");
+  });
+});
+
+/**
+ * S6d — the server-side entitlement boundary. The AI root cause is a Pro
+ * surface that spends Anthropic credits, so `getAiDiagnosis` asks this before
+ * it reads anything or calls the model. A signed-in free user must get the
+ * existing honest `{ available: false, reason }` shape — the same shape the
+ * key-missing / network / parse / no-credit fallbacks use — and NOTHING else:
+ * no fabricated diagnosis, no exception, no LLM call.
+ */
+describe("aiEntitlementRefusal", () => {
+  it("refuses a signed-in free user in the available:false shape", () => {
+    const refusal = aiEntitlementRefusal(false);
+    expect(refusal).toEqual({ available: false, reason: REASON_NOT_ENTITLED });
+  });
+
+  it("says why, and repeats what stays free, without inventing a diagnosis", () => {
+    const refusal = aiEntitlementRefusal(false);
+    expect(refusal?.reason).toContain("Pro");
+    expect(refusal?.reason).toContain("free");
+    expect(Object.keys(refusal ?? {})).toEqual(["available", "reason"]);
+  });
+
+  it("is distinct from the key-missing and unavailable fallbacks", () => {
+    expect(REASON_NOT_ENTITLED).not.toBe(REASON_NOT_CONFIGURED);
+    expect(REASON_NOT_ENTITLED).not.toBe(REASON_UNAVAILABLE);
+  });
+
+  it("lets a Pro user through to the unchanged AI path", () => {
+    expect(aiEntitlementRefusal(true)).toBeNull();
   });
 });

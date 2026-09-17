@@ -19,7 +19,11 @@ import { Button } from "../../components/ui/button";
 import { APP_COPY } from "../../lib/copy";
 import { normaliseDtc } from "../../lib/dtc";
 import { useEntitlement, type EntitlementHandle } from "../../lib/entitlement";
-import { canAddFreeVehicle, visibleVehicles } from "../../lib/pro-limits";
+import {
+  readPlanPage,
+  vehicleCreateGate,
+  type PlanPage,
+} from "../../lib/pro-limits";
 import type { Severity } from "../../lib/severity";
 import { DemoDriver } from "../../obd/demo-simulator";
 import { browserCapabilities } from "../../obd/driver";
@@ -69,7 +73,9 @@ function AppScan() {
   const entitlement = useEntitlement();
   const pro = entitlement.state.kind === "ready" && entitlement.state.entitlement.pro;
 
-  const [vehicles, setVehicles] = useState<VehicleOption[] | null>(null);
+  /* S6d: the garage arrives as a plan-limited page (free keeps 1 vehicle, Pro
+     keeps all) — the server decides what this screen may see. null = loading. */
+  const [garage, setGarage] = useState<PlanPage<VehicleOption> | null>(null);
   const [vehicleId, setVehicleId] = useState<string | null>(null);
   const [make, setMake] = useState("");
   const [model, setModel] = useState("");
@@ -106,11 +112,13 @@ function AppScan() {
     setCaps(browserCapabilities());
     refreshLastScan().catch(() => undefined);
     listVehicles()
-      .then((list) => {
-        if (!cancelled) setVehicles(list);
+      .then((page) => {
+        if (!cancelled) setGarage(readPlanPage<VehicleOption>(page));
       })
       .catch(() => {
-        if (!cancelled) setVehicles([]);
+        // An unreadable garage reads as an empty one, never as an error: the
+        // scan itself does not depend on a vehicle being attached.
+        if (!cancelled) setGarage(readPlanPage<VehicleOption>(undefined));
       });
     return () => {
       cancelled = true;
@@ -228,21 +236,37 @@ function AppScan() {
       const { id } = await createVehicle({
         data: { make: make.trim(), model: model.trim(), year: parsed },
       });
-      setVehicles((prev) => [
-        ...(prev ?? []),
-        {
+      /* Show what was just stored without re-asking the server: the row is
+         appended to the page we hold. The counters stay honest — the new row
+         is one more than the server last told us the user holds. */
+      setGarage((prev) => {
+        const page = prev ?? readPlanPage<VehicleOption>(undefined);
+        const added: VehicleOption = {
           id,
           make: make.trim(),
           model: model.trim(),
           year: Number.isInteger(parsed) ? (parsed as number) : null,
-        },
-      ]);
+        };
+        return {
+          visible: [...page.visible, added],
+          hiddenCount: page.hiddenCount,
+          limited: page.hiddenCount > 0,
+          total: page.total + 1,
+        };
+      });
       setVehicleId(id);
       setMake("");
       setModel("");
       setYear("");
-    } catch {
-      setAttachError(t.saveError);
+    } catch (err) {
+      /* The server refuses the free plan's second vehicle with a sentence that
+         says why; show it verbatim rather than replacing it with "try again",
+         which is the one thing that cannot help. */
+      const detail =
+        err instanceof Error && err.message.trim() ? err.message.trim() : null;
+      setAttachError(
+        detail === APP_COPY.pro.vehicleLimitRefusal ? detail : t.saveError,
+      );
     } finally {
       setAttaching(false);
     }
@@ -313,7 +337,7 @@ function AppScan() {
       ) : (
         <>
           <VehiclePicker
-            vehicles={vehicles}
+            garage={garage}
             vehicleId={vehicleId}
             onSelect={setVehicleId}
             make={make}
@@ -325,11 +349,11 @@ function AppScan() {
             attaching={attaching}
             attachError={attachError}
             onAttach={() => void onAttachVehicle()}
-            /* S6b: the free garage holds 1 vehicle. The add form is hidden for
-               a free user who already has one, with the Pro note in its place —
-               never a form that is filled in and then rejected. */
-            pro={pro}
-            showAddForm={pro || canAddFreeVehicle(vehicles?.length ?? 0)}
+            /* S6d: the server is the boundary. This asks the same gate it does,
+               against the count it reported, so the form is only offered when
+               the server would actually accept the vehicle — never a form that
+               is filled in and then refused. */
+            showAddForm={vehicleCreateGate(pro, garage?.total ?? 0).allowed}
           />
 
           {/* Demo — the primary free onboarding path. Placed BEFORE the live
@@ -496,7 +520,7 @@ function AppScan() {
 }
 
 function VehiclePicker({
-  vehicles,
+  garage,
   vehicleId,
   onSelect,
   make,
@@ -508,10 +532,14 @@ function VehiclePicker({
   attaching,
   attachError,
   onAttach,
-  pro,
   showAddForm,
 }: {
-  vehicles: VehicleOption[] | null;
+  /**
+   * The plan-limited garage page from the server (S6d): `visible` is what this
+   * plan may attach to, `hiddenCount`/`total` are the honest counts behind it.
+   * null while the first read is in flight.
+   */
+  garage: PlanPage<VehicleOption> | null;
   vehicleId: string | null;
   onSelect: (id: string | null) => void;
   make: string;
@@ -523,19 +551,16 @@ function VehiclePicker({
   attaching: boolean;
   attachError: string | null;
   onAttach: () => void;
-  /** Pro user — no garage limit applies. */
-  pro: boolean;
-  /** False when a free user already holds their one vehicle. */
+  /** False when the server would refuse another vehicle for this plan. */
   showAddForm: boolean;
 }) {
-  const all = vehicles ?? [];
-  const garage = visibleVehicles(all, pro);
+  const list = garage?.visible ?? [];
   return (
     <Card>
       <h2 className="text-sm font-bold text-fg">{t.vehicleHeading}</h2>
-      {vehicles === null ? (
+      {garage === null ? (
         <p className="mt-1 text-xs text-fg-subtle">Loading…</p>
-      ) : garage.visible.length > 0 ? (
+      ) : list.length > 0 ? (
         <div
           className="mt-3 flex flex-wrap gap-2"
           role="radiogroup"
@@ -554,7 +579,7 @@ function VehiclePicker({
           >
             {t.vehicleNone}
           </button>
-          {garage.visible.map((v) => (
+          {list.map((v) => (
             <button
               key={v.id}
               type="button"
@@ -577,8 +602,10 @@ function VehiclePicker({
         </p>
       )}
 
-      {/* The garage limit, said out loud — never a silently shorter list. */}
-      {garage.limited && (
+      {/* The garage limit, said out loud — never a silently shorter list. Only
+          a free user's page ever carries a hidden count (the server limits
+          nobody else), so this needs no plan check of its own. */}
+      {garage !== null && garage.hiddenCount > 0 && (
         <ProUpgradePrompt
           compact
           className="mt-3"

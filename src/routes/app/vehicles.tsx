@@ -13,7 +13,11 @@ import { ProUpgradePrompt } from "../../components/pro/pro-prompt";
 import { Button } from "../../components/ui/button";
 import { APP_COPY } from "../../lib/copy";
 import { useEntitlement } from "../../lib/entitlement";
-import { canAddFreeVehicle, visibleVehicles } from "../../lib/pro-limits";
+import {
+  readPlanPage,
+  vehicleCreateGate,
+  type PlanPage,
+} from "../../lib/pro-limits";
 import {
   createVehicle,
   listVehicles,
@@ -34,7 +38,7 @@ const INPUT_CLASS =
 
 type ListState =
   | { kind: "loading" }
-  | { kind: "ready"; vehicles: VehicleOption[] }
+  | { kind: "ready"; page: PlanPage<VehicleOption> }
   | { kind: "error" };
 
 type FieldErrors = { make?: string; model?: string; year?: string };
@@ -77,9 +81,9 @@ function AppVehicles() {
     let cancelled = false;
     setState({ kind: "loading" });
     listVehicles()
-      .then((list) => {
+      .then((page) => {
         if (!cancelled) {
-          setState({ kind: "ready", vehicles: Array.isArray(list) ? list : [] });
+          setState({ kind: "ready", page: readPlanPage<VehicleOption>(page) });
         }
       })
       .catch(() => {
@@ -135,36 +139,45 @@ function AppVehicles() {
       setNotice(v.saved);
       closeForm();
       // Re-read from the server rather than trusting what we sent: the list
-      // then shows exactly what was stored (nothing invented, nothing hidden).
+      // then shows exactly what was stored (nothing invented, nothing hidden),
+      // and the counters below stay the server's honest ones.
       try {
-        const list = await listVehicles();
-        setState({
-          kind: "ready",
-          vehicles: Array.isArray(list) ? list : [],
-        });
+        const page = await listVehicles();
+        setState({ kind: "ready", page: readPlanPage<VehicleOption>(page) });
       } catch {
         setNotice(v.refreshError);
       }
     } catch (err) {
       const detail =
         err instanceof Error && err.message.trim() ? err.message.trim() : null;
-      setSaveError(detail ? `${v.saveError} (${detail})` : v.saveError);
+      /* Two different refusals arrive here and they need different words: the
+         server's free-garage-limit refusal (which says why, and which "try
+         again" would contradict — the plan, not the attempt, is the limit) or
+         a genuine failure (nothing was stored, retrying is right). The server's
+         sentence is shown verbatim in the first case. */
+      if (detail === APP_COPY.pro.vehicleLimitRefusal) {
+        setSaveError(detail);
+      } else {
+        setSaveError(detail ? `${v.saveError} (${detail})` : v.saveError);
+      }
     } finally {
       setSaving(false);
     }
   }
 
-  const vehicles = state.kind === "ready" ? state.vehicles : [];
+  const page = state.kind === "ready" ? state.page : null;
+  const vehicles = page?.visible ?? [];
+  /** Every vehicle the user holds — the server counts these, not this screen. */
+  const total = page?.total ?? 0;
   const isEmpty = state.kind === "ready" && vehicles.length === 0;
-  /* S6b: the free garage holds 1 vehicle. The list this screen already loaded is
-     limited client-side, the real total is still shown, and the hidden count is
-     disclosed — never a silently shorter garage. */
+  /* S6d: the free garage holds 1 vehicle and the SERVER enforces it — this
+     screen renders the limited list it is given and asks the same gate before
+     offering the form, so showing it can never be a way round the limit. */
   const entitlement = useEntitlement();
   const pro =
     entitlement.state.kind === "ready" && entitlement.state.entitlement.pro;
-  const listed = state.kind === "ready" ? visibleVehicles(vehicles, pro) : null;
-  const atFreeLimit = state.kind === "ready" && !pro && vehicles.length > 0;
-  const canAdd = pro || canAddFreeVehicle(vehicles.length);
+  const atFreeLimit = state.kind === "ready" && !pro && total > 0;
+  const canAdd = vehicleCreateGate(pro, total).allowed;
 
   return (
     <div className="space-y-6">
@@ -217,13 +230,15 @@ function AppVehicles() {
         />
       )}
 
-      {state.kind === "ready" && vehicles.length > 0 && listed && (
+      {state.kind === "ready" && vehicles.length > 0 && (
         <>
           <h2 className="text-xs font-semibold uppercase tracking-wider text-fg-subtle">
-            {v.countLabel(vehicles.length)}
+            {/* The count is what the user HOLDS, not what fits on screen — the
+                note below says how many of them are not shown here. */}
+            {v.countLabel(total)}
           </h2>
           <ul className="space-y-3">
-            {listed.visible.map((vehicle) => (
+            {vehicles.map((vehicle) => (
               <VehicleRow key={vehicle.id} vehicle={vehicle} />
             ))}
           </ul>
@@ -232,12 +247,12 @@ function AppVehicles() {
 
       {/* The free garage limit, in words: what the plan keeps, and how many of
           the saved vehicles are not shown here. */}
-      {atFreeLimit && listed && (
+      {atFreeLimit && page && (
         <ProUpgradePrompt
           title={APP_COPY.pro.vehicleTitle}
           description={
-            listed.limited
-              ? APP_COPY.pro.vehicleBody(listed.hiddenCount)
+            page.hiddenCount > 0
+              ? APP_COPY.pro.vehicleBody(page.hiddenCount)
               : APP_COPY.pro.vehicleAddNote
           }
         />

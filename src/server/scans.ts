@@ -6,13 +6,36 @@
  * which holds the Neon `sql()` handle) is loaded with DYNAMIC imports
  * inside each handler so it never reaches the client bundle. The OBD
  * drivers under `src/obd/` are pure client-side — never import them here.
+ *
+ * S6d — the plan boundary is enforced HERE, not in the screens:
+ * `listScans` / `listVehicles` return a `PlanPage` (the rows the caller's plan
+ * may see + honest counts) and `createVehicle` asks the same gate the UI asks,
+ * so a signed-in free user cannot get past the paywall by calling a server
+ * function directly. Entitlement itself is never reinvented here: both sides
+ * ask S6a's `hasActivePro`. The free surfaces this file serves — saving,
+ * reading and clearing codes — are untouched and ungated.
  */
 import { createServerFn } from "@tanstack/react-start";
+import {
+  limitScansForPlan,
+  limitVehiclesForPlan,
+  vehicleCreateGate,
+  type PlanPage,
+} from "../lib/pro-limits";
 import type { ScanSource, ScanSummary } from "../lib/scan-summary";
 
 function requireUserId(user: { id: string } | null): string {
   if (!user) throw new Error("Sign in to save scans.");
   return user.id;
+}
+
+/**
+ * The empty page a signed-out caller gets from a list read. Not an error: a
+ * signed-out list is simply empty, and the Pro note must not appear for it
+ * (nothing is hidden from someone with nothing).
+ */
+function emptyPage<T>(): PlanPage<T> {
+  return { visible: [], hiddenCount: 0, limited: false, total: 0 };
 }
 
 /** Re-exported so screens import every scan type from one place. */
@@ -92,17 +115,37 @@ export type VehicleOption = {
   year: number | null;
 };
 
-/** Vehicles belonging to the signed-in user, for the scan attach picker. */
+/**
+ * Vehicles belonging to the signed-in user, for the scan attach picker and the
+ * garage screen. FREE tier gets at most FREE_VEHICLES rows (newest-first order
+ * preserved), Pro gets all of them; `hiddenCount`/`total` carry the honest
+ * counts so the UI can say "N saved but not shown" rather than silently
+ * shortening the list.
+ */
 export const listVehicles = createServerFn({ method: "GET" }).handler(
-  async (): Promise<VehicleOption[]> => {
+  async (): Promise<PlanPage<VehicleOption>> => {
     const { getCurrentUserCore } = await import("./auth-core");
     const { listVehiclesCore } = await import("./scans-core");
+    const { hasActivePro } = await import("./pro-core");
     const user = await getCurrentUserCore();
-    return listVehiclesCore(requireUserId(user));
+    const userId = requireUserId(user);
+    const [vehicles, pro] = await Promise.all([
+      listVehiclesCore(userId),
+      hasActivePro(userId),
+    ]);
+    return limitVehiclesForPlan(vehicles, pro);
   },
 );
 
-/** Minimal vehicle create inside the scan flow. */
+/**
+ * Minimal vehicle create inside the scan flow.
+ *
+ * S6d — the free garage limit is enforced server-side, at the write, with the
+ * same rule the UI uses before showing the form (`vehicleCreateGate`). A free
+ * user who already holds their one vehicle is refused honestly; a Pro user is
+ * unaffected. The refusal is a plain Error with the user-facing sentence from
+ * `APP_COPY.pro`, so a bypass attempt is told why rather than silently failing.
+ */
 export const createVehicle = createServerFn({ method: "POST" })
   .validator((input: unknown) => {
     if (typeof input !== "object" || input === null) {
@@ -126,9 +169,19 @@ export const createVehicle = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }): Promise<{ id: string }> => {
     const { getCurrentUserCore } = await import("./auth-core");
-    const { createVehicleCore } = await import("./scans-core");
+    const { countVehiclesCore, createVehicleCore } = await import("./scans-core");
+    const { hasActivePro } = await import("./pro-core");
+    const { APP_COPY } = await import("../lib/copy");
     const user = await getCurrentUserCore();
-    return createVehicleCore(requireUserId(user), data);
+    const userId = requireUserId(user);
+    const gate = vehicleCreateGate(
+      await hasActivePro(userId),
+      await countVehiclesCore(userId),
+    );
+    if (!gate.allowed) {
+      throw new Error(APP_COPY.pro.vehicleLimitRefusal);
+    }
+    return createVehicleCore(userId, data);
   });
 
 /** Persist a scan + its codes (+ the live transcript for live scans). */
@@ -176,21 +229,34 @@ export const latestScan = createServerFn({ method: "GET" }).handler(
 );
 
 /**
- * Every scan the caller has run, newest first — the History screen's list.
- * Empty array (never an error) when the user has no scans yet. Unlike
- * `latestScan` this returns LEAN rows: id, source, createdAt, verdict,
- * codeCount and the codes' plain-English titles.
+ * The caller's scans, newest first — the History screen's list. Empty (never
+ * an error) when the user has no scans yet. Unlike `latestScan` this returns
+ * LEAN rows: id, source, createdAt, verdict, codeCount and the codes'
+ * plain-English titles.
+ *
+ * S6d — the plan limit is applied HERE: a free user gets the FREE_SCAN_HISTORY
+ * newest scans and honest counts (nothing is returned that the screen would
+ * then refuse to render), a Pro user gets everything. Truncation is never
+ * silent: `hiddenCount` is what the screen turns into its "older scans are
+ * saved but not shown" note, and `total` counts every scan the user holds even
+ * if the read itself stopped at SCAN_HISTORY_LIMIT.
  */
 export const listScans = createServerFn({ method: "GET" }).handler(
-  async (): Promise<ScanSummary[]> => {
+  async (): Promise<PlanPage<ScanSummary>> => {
     const { getCurrentUserCore } = await import("./auth-core");
-    const { listScansCore } = await import("./scans-core");
+    const { countScansCore, listScansCore } = await import("./scans-core");
+    const { hasActivePro } = await import("./pro-core");
     const user = await getCurrentUserCore();
     // Signed-out callers get an empty list, not an error: the History screen
     // is behind the /app auth guard anyway, and an exception here would only
     // render a spurious error state.
-    if (!user) return [];
-    return listScansCore(user.id);
+    if (!user) return emptyPage<ScanSummary>();
+    const [scans, pro, total] = await Promise.all([
+      listScansCore(user.id),
+      hasActivePro(user.id),
+      countScansCore(user.id),
+    ]);
+    return limitScansForPlan(scans, pro, total);
   },
 );
 

@@ -581,6 +581,17 @@ export async function listVehiclesCore(
     year: r.year,
   }));
 }
+/**
+ * How many vehicles the caller holds (S6d). This is the number the free
+ * garage limit is enforced against, and the honest denominator behind the
+ * "N vehicles saved but not shown" note — `listVehiclesCore` may return fewer
+ * rows to a free user than the user actually owns.
+ */
+export async function countVehiclesCore(userId: string): Promise<number> {
+  const rows = await db<{ count: number }[]>`
+    SELECT count(*)::int AS count FROM vehicles WHERE user_id = ${userId}`;
+  return Number(rows[0]?.count ?? 0);
+}
 
 /**
  * Minimal vehicle create inside the scan flow (S3 scope decision: scans may
@@ -799,6 +810,16 @@ export async function latestScanCore(
  * — just what a list row renders. One scan's full detail still comes from
  * getScanCore.
  */
+/**
+ * How many scans the caller holds (S6d) — counted over the whole table, not
+ * the bounded read below, so the free history note never understates how many
+ * scans are actually saved.
+ */
+export async function countScansCore(userId: string): Promise<number> {
+  const rows = await db<{ count: number }[]>`
+    SELECT count(*)::int AS count FROM scans WHERE user_id = ${userId}`;
+  return Number(rows[0]?.count ?? 0);
+}
 export async function listScansCore(userId: string): Promise<ScanSummary[]> {
   if (typeof userId !== "string" || userId.length === 0) return [];
   const scans = await db<{ id: string; source: string; created_at: unknown }[]>`

@@ -334,6 +334,12 @@ export const APP_COPY = {
       } saved but not shown here.`,
     vehicleAddNote:
       "The free plan keeps 1 vehicle in the garage. iMechanic Pro keeps as many as you own.",
+    /* The server's refusal when a free user who already holds their one
+       vehicle calls createVehicle anyway (S6d — e.g. a stale tab, or a direct
+       call). Deliberately not "try again": retrying cannot work, and the
+       reason is what the user needs. Same sentence the note above states. */
+    vehicleLimitRefusal:
+      "The free plan keeps 1 vehicle in the garage, and you already have one. iMechanic Pro keeps as many as you own.",
     /* Upgrade surface (/app/pro) — prices themselves come from market.ts. */
     bandsHeading: "Choose a band",
     bandsIntro:

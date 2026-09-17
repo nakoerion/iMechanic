@@ -12,8 +12,7 @@ import { ProUpgradePrompt } from "../../components/pro/pro-prompt";
 import { Button, buttonClasses } from "../../components/ui/button";
 import { SeverityBadge } from "../../components/ui/severity-badge";
 import { APP_COPY } from "../../lib/copy";
-import { useEntitlement } from "../../lib/entitlement";
-import { visibleScans } from "../../lib/pro-limits";
+import { readPlanPage, type PlanPage } from "../../lib/pro-limits";
 import type { Severity } from "../../lib/severity";
 import {
   listScans,
@@ -36,7 +35,7 @@ const SOURCE_BADGE: Record<ScanSource, string> = {
 
 type State =
   | { kind: "loading" }
-  | { kind: "ready"; scans: ScanSummary[] }
+  | { kind: "ready"; page: PlanPage<ScanSummary> }
   | { kind: "error" };
 
 /**
@@ -63,21 +62,18 @@ function formatWhen(iso: string): string {
 function AppHistory() {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [attempt, setAttempt] = useState(0);
-  /* S6b: free keeps the 3 most recent scans. The limit is applied to the list
-     this screen already loads — no server change — and the hidden count is
-     always disclosed below the list. */
-  const entitlement = useEntitlement();
-  const pro =
-    entitlement.state.kind === "ready" && entitlement.state.entitlement.pro;
-  const listed = state.kind === "ready" ? visibleScans(state.scans, pro) : null;
+  /* S6d: the free plan's 3-newest-scans limit is enforced by the server, which
+     returns exactly the rows this screen may show plus the honest counts. The
+     screen renders what it is given — it never slices a longer list itself, so
+     the limit cannot be bypassed by calling the server function directly. */
 
   useEffect(() => {
     let cancelled = false;
     setState({ kind: "loading" });
     listScans()
-      .then((scans) => {
+      .then((page) => {
         if (!cancelled) {
-          setState({ kind: "ready", scans: Array.isArray(scans) ? scans : [] });
+          setState({ kind: "ready", page: readPlanPage<ScanSummary>(page) });
         }
       })
       .catch(() => {
@@ -126,7 +122,7 @@ function AppHistory() {
         </section>
       )}
 
-      {state.kind === "ready" && state.scans.length === 0 && (
+      {state.kind === "ready" && state.page.visible.length === 0 && (
         <EmptyState
           icon={HistoryIcon}
           eyebrow={h.emptyEyebrow}
@@ -144,20 +140,20 @@ function AppHistory() {
         />
       )}
 
-      {state.kind === "ready" && state.scans.length > 0 && listed && (
+      {state.kind === "ready" && state.page.visible.length > 0 && (
         <>
           <ul className="space-y-3">
-            {listed.visible.map((scan) => (
+            {state.page.visible.map((scan) => (
               <ScanRow key={scan.id} scan={scan} />
             ))}
           </ul>
           {/* The plan limit, said out loud: the free tier shows the 3 most
               recent scans and this card says so — a shortening list is never
               left for the user to notice. */}
-          {listed.limited && (
+          {state.page.hiddenCount > 0 && (
             <ProUpgradePrompt
               title={APP_COPY.pro.historyTitle}
-              description={APP_COPY.pro.historyBody(listed.hiddenCount)}
+              description={APP_COPY.pro.historyBody(state.page.hiddenCount)}
             />
           )}
         </>

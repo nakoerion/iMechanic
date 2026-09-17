@@ -44,6 +44,26 @@ const ANTHROPIC_VERSION = "2023-06-01";
 
 export const REASON_NOT_CONFIGURED = "AI diagnosis isn't configured yet.";
 export const REASON_UNAVAILABLE = "AI diagnosis is unavailable right now.";
+/**
+ * The reason a signed-in FREE user gets (S6d). The AI root cause is a Pro
+ * surface, so the call is refused before it costs anything — and the refusal
+ * is the same honest `{ available: false, reason }` shape the other fallbacks
+ * use, never a fabricated diagnosis and never a silent failure.
+ */
+export const REASON_NOT_ENTITLED =
+  "AI root cause is part of iMechanic Pro. Reading codes and the severity verdict stay free.";
+
+/**
+ * The entitlement branch of `getAiDiagnosis` (S6d): the AI root cause is Pro
+ * only. Returns the refusal for a signed-in free user, or null when the call
+ * may proceed. Kept pure so the boundary is unit-testable without a request
+ * context or a database.
+ */
+export function aiEntitlementRefusal(
+  pro: boolean,
+): { available: false; reason: string } | null {
+  return pro ? null : { available: false, reason: REASON_NOT_ENTITLED };
+}
 
 function clampConfidence(value: unknown, fallback: number): number {
   if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
