@@ -5,6 +5,8 @@ import {
   ScanIcon,
   WrenchIcon,
 } from "../../components/icons";
+import { buttonClasses } from "../../components/ui/button";
+import { cn } from "../../lib/cn";
 
 export const Route = createFileRoute("/app/")({
   component: AppHome,
@@ -53,7 +55,8 @@ function AppHome() {
           <ArrowRightIcon className="h-4 w-4" />
         </Link>
         <p className="mt-4 text-xs font-medium text-slate-400">
-          Scanning and demo mode arrive with an upcoming update.
+          Scanning is live — connect an adapter, run the demo, or type a code in
+          by hand.
         </p>
       </section>
 
@@ -78,16 +81,26 @@ function AppHome() {
         </ol>
       </section>
 
-      {/* Recent activity — honest empty state */}
-      <section className="flex flex-col items-center rounded-2xl border border-dashed border-line-strong bg-surface px-6 py-12 text-center">
+      {/* Saving is live: every scan is persisted (S3). This card therefore
+          says what happens to a scan — it never claims the list is empty. */}
+      <section className="flex flex-col items-center rounded-2xl border border-line bg-surface px-6 py-10 text-center shadow-sm">
         <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-navy-950 text-amber-400">
           <HistoryIcon className="h-7 w-7" />
         </span>
-        <h2 className="mt-4 text-lg font-bold text-fg">No scans yet</h2>
+        <h2 className="mt-4 text-lg font-bold text-fg">
+          Saved to your history
+        </h2>
         <p className="mt-2 max-w-sm text-sm leading-relaxed text-fg-muted">
-          Your scan history will show up here. Once connecting and scanning are
-          live, every diagnosis is saved to your history automatically.
+          Every scan — live, demo or typed in — is saved to your history
+          automatically. They are all on the History tab.
         </p>
+        <Link
+          to="/app/history"
+          className={cn("mt-5", buttonClasses("secondary", "md"))}
+        >
+          <HistoryIcon className="h-4 w-4" aria-hidden />
+          View history
+        </Link>
       </section>
     </div>
   );

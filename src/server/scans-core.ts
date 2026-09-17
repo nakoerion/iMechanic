@@ -26,6 +26,11 @@ import {
   type Verdict,
 } from "../lib/diagnosis";
 import { isDtcStatus, normaliseDtc } from "../lib/dtc";
+import {
+  SCAN_HISTORY_LIMIT,
+  summariseScans,
+  type ScanSummary,
+} from "../lib/scan-summary";
 import type { ObdTranscript } from "../obd/driver";
 
 const db = sql();
@@ -109,22 +114,24 @@ function isScanSource(value: unknown): value is ScanSource {
   return value === "live" || value === "demo" || value === "manual";
 }
 
-type ValidatedCode = { code: string; status: "stored" | "pending" | "permanent" };
+type ValidatedCode = {
+  code: string;
+  status: "stored" | "pending" | "permanent";
+};
 
 /**
  * Validate one client-supplied code row. Strict on purpose: a malformed code
  * is a client bug or tampering, and the database must never hold it.
  */
-function validateCodeRow(
-  row: unknown,
-): ValidatedCode {
+function validateCodeRow(row: unknown): ValidatedCode {
   if (typeof row !== "object" || row === null) {
     throw new Error("Each code needs a code and a status.");
   }
   const { code, status } = row as { code?: unknown; status?: unknown };
   const normal = normaliseDtc(code);
   if (!normal) throw new Error(`"${String(code)}" is not a valid fault code.`);
-  if (!isDtcStatus(status)) throw new Error(`Status "${String(status)}" is not valid.`);
+  if (!isDtcStatus(status))
+    throw new Error(`Status "${String(status)}" is not valid.`);
   return { code: normal, status };
 }
 
@@ -234,7 +241,9 @@ function toPersistedScan(
     createdAt: String(scanRow.created_at),
     codes,
     catalogTitles: Object.fromEntries(
-      catalogRows.filter((c) => c.title).map((c) => [c.code, c.title as string]),
+      catalogRows
+        .filter((c) => c.title)
+        .map((c) => [c.code, c.title as string]),
     ),
     codeDetails,
     diagnosis: diagnosisRow
@@ -332,24 +341,28 @@ async function loadScanForUser(
   userId: string,
   scanId: string,
 ): Promise<PersistedScan | null> {
-  const scans = await db<{
-    id: string;
-    source: string;
-    vehicle_id: string | null;
-    created_at: unknown;
-    raw_json: unknown;
-  }[]>`
+  const scans = await db<
+    {
+      id: string;
+      source: string;
+      vehicle_id: string | null;
+      created_at: unknown;
+      raw_json: unknown;
+    }[]
+  >`
     SELECT id, source, vehicle_id, created_at, raw_json
     FROM scans
     WHERE id = ${scanId} AND user_id = ${userId}`;
   if (scans.length === 0) return null;
   const scan = scans[0]!;
-  const codes = await db<{
-    id: string;
-    code: string;
-    status: string;
-    created_at: unknown;
-  }[]>`
+  const codes = await db<
+    {
+      id: string;
+      code: string;
+      status: string;
+      created_at: unknown;
+    }[]
+  >`
     SELECT id, code, status, created_at
     FROM scan_codes
     WHERE scan_id = ${scan.id} AND user_id = ${userId}
@@ -357,38 +370,44 @@ async function loadScanForUser(
   const catalog =
     codes.length === 0
       ? []
-      : await db<{
-          code: string;
-          title: string | null;
-          system: string | null;
-          generic_cause: string | null;
-          severity_default: string | null;
-        }[]>`
+      : await db<
+          {
+            code: string;
+            title: string | null;
+            system: string | null;
+            generic_cause: string | null;
+            severity_default: string | null;
+          }[]
+        >`
         SELECT code, title, system, generic_cause, severity_default FROM dtc_catalog
         WHERE code IN (SELECT DISTINCT UNNEST(${codes.map((c) => c.code)}::text[]))`;
   // Two diagnoses rows per scan at most: source='rules' (the free verdict,
   // always present) and source='ai' (the Pro root cause, written on demand
   // by ai.ts). Fetched distinctly — never ORDER BY/LIMIT across sources.
   // S5: the rules row carries the persisted cost midpoints + currency.
-  const rulesRows = await db<{
-    id: string;
-    verdict: string;
-    reasoning: string | null;
-    confidence: number | null;
-    cost_diy_cents: number | null;
-    cost_shop_cents: number | null;
-    currency: string | null;
-  }[]>`
+  const rulesRows = await db<
+    {
+      id: string;
+      verdict: string;
+      reasoning: string | null;
+      confidence: number | null;
+      cost_diy_cents: number | null;
+      cost_shop_cents: number | null;
+      currency: string | null;
+    }[]
+  >`
     SELECT id, verdict, reasoning, confidence, cost_diy_cents, cost_shop_cents, currency FROM diagnoses
     WHERE scan_id = ${scan.id} AND user_id = ${userId} AND source = 'rules'
     ORDER BY created_at DESC
     LIMIT 1`;
-  const aiRows = await db<{
-    id: string;
-    root_cause: string | null;
-    reasoning: string | null;
-    confidence: number | null;
-  }[]>`
+  const aiRows = await db<
+    {
+      id: string;
+      root_cause: string | null;
+      reasoning: string | null;
+      confidence: number | null;
+    }[]
+  >`
     SELECT id, root_cause, reasoning, confidence FROM diagnoses
     WHERE scan_id = ${scan.id} AND user_id = ${userId} AND source = 'ai'
     ORDER BY created_at DESC
@@ -472,12 +491,14 @@ export async function loadAiContextCore(
   const scan = await loadScanForUser(userId, scanId);
   if (!scan || !scan.diagnosis) return null;
   const vehicles = scan.vehicleId
-    ? await db<{
-        make: string | null;
-        model: string | null;
-        year: number | null;
-        mileage_km: number | null;
-      }[]>`
+    ? await db<
+        {
+          make: string | null;
+          model: string | null;
+          year: number | null;
+          mileage_km: number | null;
+        }[]
+      >`
       SELECT make, model, year, mileage_km FROM vehicles
       WHERE id = ${scan.vehicleId} AND user_id = ${userId}`
     : [];
@@ -532,15 +553,24 @@ export async function insertAiDiagnosisCore(
 }
 
 /** Vehicles belonging to the caller — for the scan screen's attach picker. */
-export async function listVehiclesCore(userId: string): Promise<
-  { id: string; make: string | null; model: string | null; year: number | null }[]
-> {
-  const rows = await db<{
+export async function listVehiclesCore(
+  userId: string,
+): Promise<
+  {
     id: string;
     make: string | null;
     model: string | null;
     year: number | null;
-  }[]>`
+  }[]
+> {
+  const rows = await db<
+    {
+      id: string;
+      make: string | null;
+      model: string | null;
+      year: number | null;
+    }[]
+  >`
     SELECT id, make, model, year FROM vehicles
     WHERE user_id = ${userId}
     ORDER BY created_at ASC`;
@@ -590,7 +620,11 @@ function validateTranscript(value: unknown): ObdTranscript | null {
     adapter?: unknown;
     entries?: unknown;
   };
-  if (transport !== "bluetooth" && transport !== "serial" && transport !== "native") {
+  if (
+    transport !== "bluetooth" &&
+    transport !== "serial" &&
+    transport !== "native"
+  ) {
     return null;
   }
   if (typeof adapter !== "string" || adapter.trim().length === 0) return null;
@@ -749,6 +783,55 @@ export async function latestScanCore(
     LIMIT 1`;
   if (scans.length === 0) return null;
   return loadScanForUser(userId, scans[0]!.id);
+}
+
+/**
+ * Every scan the caller has run, newest first — the History screen's list
+ * (phase 2a). Bounded by SCAN_HISTORY_LIMIT, and every one of the four
+ * queries is scoped by `user_id`, so another user's scans can never appear
+ * (the composite FKs from 002 enforce the same rule underneath).
+ *
+ * Deliberately LEAN: no per-scan code detail, catalog metadata or cost bands
+ * — just what a list row renders. One scan's full detail still comes from
+ * getScanCore.
+ */
+export async function listScansCore(userId: string): Promise<ScanSummary[]> {
+  if (typeof userId !== "string" || userId.length === 0) return [];
+  const scans = await db<{ id: string; source: string; created_at: unknown }[]>`
+    SELECT id, source, created_at
+    FROM scans
+    WHERE user_id = ${userId}
+    ORDER BY created_at DESC
+    LIMIT ${SCAN_HISTORY_LIMIT}`;
+  if (scans.length === 0) return [];
+  const scanIds = scans.map((s) => s.id);
+  const codes = await db<{ scan_id: string; code: string }[]>`
+    SELECT scan_id, code
+    FROM scan_codes
+    WHERE user_id = ${userId} AND scan_id = ANY(${scanIds}::uuid[])
+    ORDER BY created_at ASC`;
+  // dtc_catalog is the one deliberate global table: its titles are shared
+  // reference data, read here for exactly the codes these scans contain.
+  const codeList = [...new Set(codes.map((c) => c.code))];
+  const catalogTitles =
+    codeList.length === 0
+      ? []
+      : await db<{ code: string; title: string | null }[]>`
+        SELECT code, title FROM dtc_catalog
+        WHERE code = ANY(${codeList}::text[]) AND title IS NOT NULL`;
+  // The free rules verdict, newest first per scan (the mapper keeps the first
+  // row it sees per scan). source='ai' rows are the Pro layer and are not
+  // what History shows.
+  const verdicts = await db<{ scan_id: string; verdict: string }[]>`
+    SELECT scan_id, verdict FROM diagnoses
+    WHERE user_id = ${userId} AND scan_id = ANY(${scanIds}::uuid[]) AND source = 'rules'
+    ORDER BY created_at DESC`;
+  return summariseScans(
+    scans,
+    codes,
+    verdicts,
+    Object.fromEntries(catalogTitles.map((t) => [t.code, t.title as string])),
+  );
 }
 
 /** One scan by id — only when it belongs to the caller. */

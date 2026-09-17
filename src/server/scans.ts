@@ -8,13 +8,19 @@
  * drivers under `src/obd/` are pure client-side — never import them here.
  */
 import { createServerFn } from "@tanstack/react-start";
+import type { ScanSource, ScanSummary } from "../lib/scan-summary";
 
 function requireUserId(user: { id: string } | null): string {
   if (!user) throw new Error("Sign in to save scans.");
   return user.id;
 }
 
-export type ScanSource = "live" | "demo" | "manual";
+/** Re-exported so screens import every scan type from one place. */
+export type {
+  ScanSource,
+  ScanSummary,
+  ScanSummaryCode,
+} from "../lib/scan-summary";
 
 export type PersistedCode = {
   id: string;
@@ -166,6 +172,25 @@ export const latestScan = createServerFn({ method: "GET" }).handler(
     const user = await getCurrentUserCore();
     if (!user) return null;
     return latestScanCore(user.id);
+  },
+);
+
+/**
+ * Every scan the caller has run, newest first — the History screen's list.
+ * Empty array (never an error) when the user has no scans yet. Unlike
+ * `latestScan` this returns LEAN rows: id, source, createdAt, verdict,
+ * codeCount and the codes' plain-English titles.
+ */
+export const listScans = createServerFn({ method: "GET" }).handler(
+  async (): Promise<ScanSummary[]> => {
+    const { getCurrentUserCore } = await import("./auth-core");
+    const { listScansCore } = await import("./scans-core");
+    const user = await getCurrentUserCore();
+    // Signed-out callers get an empty list, not an error: the History screen
+    // is behind the /app auth guard anyway, and an exception here would only
+    // render a spurious error state.
+    if (!user) return [];
+    return listScansCore(user.id);
   },
 );
 
