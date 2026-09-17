@@ -45,6 +45,24 @@ Never commit values for any of these — they are injected into the environment.
 | `TEST_DATABASE_URL` | required for DB-backed tests | Separate Neon **branch** for tests. Never point it at production. |
 | `MIGRATION_DATABASE_URL` | optional override | When set, `bun run migrate` targets this URL instead of `DATABASE_URL`. Used by the migration test to exercise the runner against the test database. |
 | `ANTHROPIC_API_KEY` | required from S4 | LLM key for AI root-cause analysis. When absent or the AI is unavailable, the app must say so and fall back to the deterministic rules engine — never fabricate a diagnosis. |
+| `STRIPE_SECRET_KEY` | required from S6a | Stripe secret key (`sk_test_…` in the sandbox). Read only in server code (`src/server/stripe.ts`); a payment path without it fails with an honest "not configured yet" instead of charging anything. |
+| `STRIPE_PUBLISHABLE_KEY` | required from S6b | Stripe publishable key, for the client-side surface S6b adds. Not read by S6a. |
+| `STRIPE_WEBHOOK_SECRET` | required for subscriptions to be recorded | Signing secret of the webhook endpoint registered at `POST /api/stripe-webhook`. Until it is set, that endpoint answers an honest `503 not configured` — it never accepts unverified events. Register the endpoint (Stripe CLI: `stripe listen --forward-to <site origin>/api/stripe-webhook` for local work; Dashboard → Developers → Webhooks for the deployed site) and enable `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`. |
+
+## Stripe catalogue (Pro tier)
+
+The Pro product and its three annual prices are created in Stripe from
+`PRICE_BANDS` in `src/lib/market.ts` — amounts are never typed into a component or
+into SQL. Run the idempotent ensure routine after connecting the account (or after
+changing a band amount):
+
+```bash
+bun run stripe:ensure   # creates/verifies product + prices, prints the ids
+```
+
+It prints the ids to record in `src/server/stripe-catalog.ts` and exits non-zero if
+any recorded price no longer matches `market.ts`. Re-running it never duplicates
+the product or a price.
 
 ## Test database isolation
 
