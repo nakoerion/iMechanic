@@ -267,7 +267,7 @@ export const APP_COPY = {
     yearPlaceholder: "For example 2016",
     makeRequired: "Enter the make — for example VW.",
     modelRequired: "Enter the model — for example Golf.",
-    yearInvalid: "Enter a four-digit year like 2016, or leave it empty.",
+    yearInvalid: "Enter a year from 1980 to next year, or leave it empty.",
     saveButton: "Save vehicle",
     saving: "Saving…",
     cancel: "Cancel",

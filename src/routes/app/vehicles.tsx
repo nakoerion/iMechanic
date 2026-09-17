@@ -37,8 +37,8 @@ type ListState =
 type FieldErrors = { make?: string; model?: string; year?: string };
 
 /**
- * Make + model, then the year when there is one. Every part is optional in the
- * database, so a missing piece is simply left out — never filled with a guess.
+ * Make + model only — the year is rendered separately. Every part is optional
+ * in the database, so a missing piece is simply left out — never filled with a guess.
  */
 function vehicleName(vehicle: VehicleOption): string {
   return [vehicle.make, vehicle.model].filter(Boolean).join(" ") || v.unnamed;
@@ -257,6 +257,7 @@ function AppVehicles() {
               <input
                 id="vehicle-make"
                 name="make"
+                maxLength={80}
                 value={make}
                 onChange={(e) => setMake(e.target.value)}
                 placeholder={v.makeHint}
@@ -287,6 +288,7 @@ function AppVehicles() {
               <input
                 id="vehicle-model"
                 name="model"
+                maxLength={80}
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
                 placeholder={v.modelHint}
