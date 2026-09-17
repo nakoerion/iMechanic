@@ -321,7 +321,7 @@ function Hero() {
         {/* The hero visual IS the product: the real verdict + code cards. */}
         <div className="im-rise im-delay-2">
           <PhoneFrame label="Scan result" screenLabel="Sample scan result screen">
-            <VerdictPanel severity="repair_soon" codeCount={SAMPLE_SCAN.length} />
+            <VerdictPanel severity="repair_soon" codeCount={1} />
             <FaultCodeCard {...SAMPLE_SCAN[0]} />
           </PhoneFrame>
           <p className="mx-auto mt-4 max-w-[21.5rem] text-center text-xs leading-relaxed text-slate-400">
