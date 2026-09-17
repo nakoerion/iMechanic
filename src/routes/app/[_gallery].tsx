@@ -7,7 +7,14 @@ import { Button } from "../../components/ui/button";
 import { FormField, inputClasses } from "../../components/ui/form-field";
 import { SeverityBadge } from "../../components/ui/severity-badge";
 import { ThemeControl } from "../../components/ui/theme-control";
+import { ProUpgradePrompt } from "../../components/pro/pro-prompt";
+import {
+  FreePlanCard,
+  ProStatusCard,
+  ProUpgradePanel,
+} from "../../components/pro/pro-plan";
 import { APP_COPY } from "../../lib/copy";
+import type { Entitlement, EntitlementHandle } from "../../lib/entitlement";
 import {
   MARKET_LIST,
   PRICE_BANDS,
@@ -23,6 +30,46 @@ import type { Severity } from "../../lib/severity";
 export const Route = createFileRoute("/app/_gallery")({
   component: Gallery,
 });
+
+/* ------------------------------------------------------------------ */
+/* Sample entitlements — invented for review only. The real screens   */
+/* read `getEntitlement()`; these exist so every Pro state can be      */
+/* eyeballed side by side without touching Stripe.                     */
+/* ------------------------------------------------------------------ */
+
+function sampleHandle(entitlement: Entitlement): EntitlementHandle {
+  return { state: { kind: "ready", entitlement }, reload: () => undefined };
+}
+
+const PRO_SAMPLE: Entitlement = {
+  signedIn: true,
+  pro: true,
+  status: "active",
+  bandId: "b",
+  currentPeriodEnd: new Date(Date.now() + 30 * 86_400_000).toISOString(),
+  stripeConfigured: true,
+  stripeTestMode: true,
+};
+
+const NO_STRIPE_SAMPLE: Entitlement = {
+  signedIn: true,
+  pro: false,
+  status: null,
+  bandId: null,
+  currentPeriodEnd: null,
+  stripeConfigured: false,
+  stripeTestMode: false,
+};
+
+const FREE_STRIPE_SAMPLE: Entitlement = {
+  signedIn: true,
+  pro: false,
+  status: null,
+  bandId: null,
+  currentPeriodEnd: null,
+  stripeConfigured: true,
+  stripeTestMode: true,
+};
 
 /* ------------------------------------------------------------------ */
 /* Sample data — invented for review only. Not real vehicle data.      */
@@ -220,6 +267,29 @@ function Gallery() {
           </ul>
           <p className="text-xs leading-snug text-fg-subtle">{PRICING_PREVIEW_NOTE}</p>
         </Card>
+      </Section>
+
+      <Section
+        title="iMechanic Pro states"
+        note="sample entitlements — the real screens read getEntitlement()"
+      >
+        <ProStatusCard entitlement={sampleHandle(PRO_SAMPLE)} showManageNote={false} />
+        <FreePlanCard />
+        <ProUpgradePrompt
+          title={APP_COPY.pro.aiTitle}
+          description={APP_COPY.pro.aiBody}
+        />
+        <ProUpgradePrompt
+          compact
+          title={APP_COPY.pro.vehicleTitle}
+          description={APP_COPY.pro.vehicleAddNote}
+        />
+        {/* The honest "payments aren't set up yet" state: bands shown as
+            information, no button at all. */}
+        <ProUpgradePanel entitlement={sampleHandle(NO_STRIPE_SAMPLE)} />
+        {/* The same panel with Stripe configured: the bands gain their Upgrade
+            actions. Sample state only — the buttons talk to the real server. */}
+        <ProUpgradePanel entitlement={sampleHandle(FREE_STRIPE_SAMPLE)} />
       </Section>
 
       <Section title="Dark preview" note="the same components inside a nested dark subtree">

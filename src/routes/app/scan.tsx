@@ -13,9 +13,13 @@ import { AiRootCausePanel } from "../../components/severity/ai-root-cause-panel"
 import { VerdictPanel } from "../../components/severity/verdict-panel";
 import { CostDecisionCard } from "../../components/decide/cost-decision-card";
 import { RepairJobSection } from "../../components/repair/repair-job-section";
+import { ProGate } from "../../components/pro/pro-gate";
+import { ProUpgradePrompt } from "../../components/pro/pro-prompt";
 import { Button } from "../../components/ui/button";
 import { APP_COPY } from "../../lib/copy";
 import { normaliseDtc } from "../../lib/dtc";
+import { useEntitlement, type EntitlementHandle } from "../../lib/entitlement";
+import { canAddFreeVehicle, visibleVehicles } from "../../lib/pro-limits";
 import type { Severity } from "../../lib/severity";
 import { DemoDriver } from "../../obd/demo-simulator";
 import { browserCapabilities } from "../../obd/driver";
@@ -61,6 +65,9 @@ function AppScan() {
     "loading",
   );
   const [justScannedId, setJustScannedId] = useState<string | null>(null);
+  /* One entitlement lookup per screen, shared by every gate below (S6b). */
+  const entitlement = useEntitlement();
+  const pro = entitlement.state.kind === "ready" && entitlement.state.entitlement.pro;
 
   const [vehicles, setVehicles] = useState<VehicleOption[] | null>(null);
   const [vehicleId, setVehicleId] = useState<string | null>(null);
@@ -289,6 +296,7 @@ function AppScan() {
           cleared={cleared}
           clearBusy={clearBusy}
           clearError={clearError}
+          entitlement={entitlement}
           onClear={() => void onClear()}
           onNewScan={() => {
             // QA: "Start a new scan" must return to the fresh entry form.
@@ -317,6 +325,11 @@ function AppScan() {
             attaching={attaching}
             attachError={attachError}
             onAttach={() => void onAttachVehicle()}
+            /* S6b: the free garage holds 1 vehicle. The add form is hidden for
+               a free user who already has one, with the Pro note in its place —
+               never a form that is filled in and then rejected. */
+            pro={pro}
+            showAddForm={pro || canAddFreeVehicle(vehicles?.length ?? 0)}
           />
 
           {/* Demo — the primary free onboarding path. Placed BEFORE the live
@@ -495,6 +508,8 @@ function VehiclePicker({
   attaching,
   attachError,
   onAttach,
+  pro,
+  showAddForm,
 }: {
   vehicles: VehicleOption[] | null;
   vehicleId: string | null;
@@ -508,13 +523,19 @@ function VehiclePicker({
   attaching: boolean;
   attachError: string | null;
   onAttach: () => void;
+  /** Pro user — no garage limit applies. */
+  pro: boolean;
+  /** False when a free user already holds their one vehicle. */
+  showAddForm: boolean;
 }) {
+  const all = vehicles ?? [];
+  const garage = visibleVehicles(all, pro);
   return (
     <Card>
       <h2 className="text-sm font-bold text-fg">{t.vehicleHeading}</h2>
       {vehicles === null ? (
         <p className="mt-1 text-xs text-fg-subtle">Loading…</p>
-      ) : vehicles.length > 0 ? (
+      ) : garage.visible.length > 0 ? (
         <div
           className="mt-3 flex flex-wrap gap-2"
           role="radiogroup"
@@ -533,7 +554,7 @@ function VehiclePicker({
           >
             {t.vehicleNone}
           </button>
-          {vehicles.map((v) => (
+          {garage.visible.map((v) => (
             <button
               key={v.id}
               type="button"
@@ -555,63 +576,82 @@ function VehiclePicker({
           {t.vehicleNone}
         </p>
       )}
-      <div className="mt-4 grid grid-cols-2 gap-2">
-        <div>
-          <label htmlFor="scan-make" className="block text-xs font-semibold text-fg">
-            {t.vehicleNewMakeLabel}
-          </label>
-          <input
-            id="scan-make"
-            value={make}
-            onChange={(e) => onMake(e.target.value)}
-            placeholder={t.vehicleNewMakeHint}
-            autoComplete="off"
-            className="mt-1 h-12 w-full rounded-control border-2 border-line-strong bg-surface px-3 text-base text-fg placeholder:text-fg-subtle focus:border-brand focus:outline-none"
-          />
-        </div>
-        <div>
-          <label htmlFor="scan-model" className="block text-xs font-semibold text-fg">
-            {t.vehicleNewModelLabel}
-          </label>
-          <input
-            id="scan-model"
-            value={model}
-            onChange={(e) => onModel(e.target.value)}
-            placeholder={t.vehicleNewModelHint}
-            autoComplete="off"
-            className="mt-1 h-12 w-full rounded-control border-2 border-line-strong bg-surface px-3 text-base text-fg placeholder:text-fg-subtle focus:border-brand focus:outline-none"
-          />
-        </div>
-      </div>
-      <div className="mt-2">
-        <label htmlFor="scan-year" className="block text-xs font-semibold text-fg">
-          {t.vehicleNewYearLabel}
-        </label>
-        <input
-          id="scan-year"
-          value={year}
-          onChange={(e) => onYear(e.target.value)}
-          inputMode="numeric"
-          autoComplete="off"
-          className="mt-1 h-12 w-full rounded-control border-2 border-line-strong bg-surface px-3 text-base text-fg placeholder:text-fg-subtle focus:border-brand focus:outline-none"
+
+      {/* The garage limit, said out loud — never a silently shorter list. */}
+      {garage.limited && (
+        <ProUpgradePrompt
+          compact
+          className="mt-3"
+          title={APP_COPY.pro.vehicleTitle}
+          description={APP_COPY.pro.vehicleBody(garage.hiddenCount)}
         />
-      </div>
-      {attachError && (
-        <p role="alert" className="mt-2 text-xs font-medium text-danger-fg">
-          {attachError}
+      )}
+
+      {showAddForm ? (
+        <>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <div>
+              <label htmlFor="scan-make" className="block text-xs font-semibold text-fg">
+                {t.vehicleNewMakeLabel}
+              </label>
+              <input
+                id="scan-make"
+                value={make}
+                onChange={(e) => onMake(e.target.value)}
+                placeholder={t.vehicleNewMakeHint}
+                autoComplete="off"
+                className="mt-1 h-12 w-full rounded-control border-2 border-line-strong bg-surface px-3 text-base text-fg placeholder:text-fg-subtle focus:border-brand focus:outline-none"
+              />
+            </div>
+            <div>
+              <label htmlFor="scan-model" className="block text-xs font-semibold text-fg">
+                {t.vehicleNewModelLabel}
+              </label>
+              <input
+                id="scan-model"
+                value={model}
+                onChange={(e) => onModel(e.target.value)}
+                placeholder={t.vehicleNewModelHint}
+                autoComplete="off"
+                className="mt-1 h-12 w-full rounded-control border-2 border-line-strong bg-surface px-3 text-base text-fg placeholder:text-fg-subtle focus:border-brand focus:outline-none"
+              />
+            </div>
+          </div>
+          <div className="mt-2">
+            <label htmlFor="scan-year" className="block text-xs font-semibold text-fg">
+              {t.vehicleNewYearLabel}
+            </label>
+            <input
+              id="scan-year"
+              value={year}
+              onChange={(e) => onYear(e.target.value)}
+              inputMode="numeric"
+              autoComplete="off"
+              className="mt-1 h-12 w-full rounded-control border-2 border-line-strong bg-surface px-3 text-base text-fg placeholder:text-fg-subtle focus:border-brand focus:outline-none"
+            />
+          </div>
+          {attachError && (
+            <p role="alert" className="mt-2 text-xs font-medium text-danger-fg">
+              {attachError}
+            </p>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mt-2"
+            loading={attaching}
+            loadingLabel={t.vehicleAttaching}
+            disabled={!make.trim() || !model.trim()}
+            onClick={onAttach}
+          >
+            {t.vehicleAttachNew}
+          </Button>
+        </>
+      ) : (
+        <p className="mt-3 text-xs leading-relaxed text-fg-subtle">
+          {APP_COPY.pro.vehicleAddNote}
         </p>
       )}
-      <Button
-        variant="ghost"
-        size="sm"
-        className="mt-2"
-        loading={attaching}
-        loadingLabel={t.vehicleAttaching}
-        disabled={!make.trim() || !model.trim()}
-        onClick={onAttach}
-      >
-        {t.vehicleAttachNew}
-      </Button>
     </Card>
   );
 }
@@ -622,6 +662,7 @@ function ScanResult({
   cleared,
   clearBusy,
   clearError,
+  entitlement,
   onClear,
   onNewScan,
 }: {
@@ -630,6 +671,9 @@ function ScanResult({
   cleared: boolean;
   clearBusy: boolean;
   clearError: string | null;
+  /** Entitlement for the Pro gates (AI, Decide/Act) — the free surfaces above
+   *  and below them never depend on it. */
+  entitlement: EntitlementHandle;
   onClear: () => void;
   onNewScan: () => void;
 }) {
@@ -668,30 +712,44 @@ function ScanResult({
       )}
 
       {/* PRO AI root cause (S4 UI) — BELOW the free verdict + reasons, BEFORE
-          the fault-codes list. Never gates, blurs, or badges the free
-          VerdictPanel above. */}
-      <AiRootCausePanel scanId={scan.id} initial={scan.aiDiagnosis} />
+          the fault-codes list. Gated in S6b: a Pro user sees the panel exactly
+          as before; a free user sees the explicit Pro card in its place. The
+          free VerdictPanel above is untouched — never blurred, dimmed or
+          badged. */}
+      <ProGate
+        entitlement={entitlement}
+        title={APP_COPY.pro.aiTitle}
+        description={APP_COPY.pro.aiBody}
+      >
+        <AiRootCausePanel scanId={scan.id} initial={scan.aiDiagnosis} />
+      </ProGate>
 
-      {/* S5 Decide + Act + Verify — BELOW the free verdict + reasons and
-          BELOW the AI panel (golden-path order: Verdict → AI → Decide →
-          Act → Verify). Free surfaces, never locked/badged/blurred. */}
+      {/* S5 Decide + Act + Verify — Pro since S6b, and gated as ONE block: they
+          are the same "plan the repair" step of the golden path (cost band →
+          guided steps → re-scan verification), so a free user gets one clear
+          Pro card here rather than three near-identical ones. Still BELOW the
+          free verdict and code cards in the layout. */}
       {scan.diagnosis && (
-        <CostDecisionCard
-          family={scan.diagnosis.repairFamily}
-          currency={scan.diagnosis.currency}
-          diyLowCents={scan.diagnosis.diyLowCents}
-          diyHighCents={scan.diagnosis.diyHighCents}
-          shopLowCents={scan.diagnosis.shopLowCents}
-          shopHighCents={scan.diagnosis.shopHighCents}
-          workshopRecommended={scan.diagnosis.workshopRecommended}
-        />
-      )}
-      {scan.diagnosis && (
-        <RepairJobSection
-          scanId={scan.id}
-          diagnosisId={scan.diagnosis.id}
-          family={scan.diagnosis.repairFamily}
-        />
+        <ProGate
+          entitlement={entitlement}
+          title={APP_COPY.pro.repairTitle}
+          description={APP_COPY.pro.repairBody}
+        >
+          <CostDecisionCard
+            family={scan.diagnosis.repairFamily}
+            currency={scan.diagnosis.currency}
+            diyLowCents={scan.diagnosis.diyLowCents}
+            diyHighCents={scan.diagnosis.diyHighCents}
+            shopLowCents={scan.diagnosis.shopLowCents}
+            shopHighCents={scan.diagnosis.shopHighCents}
+            workshopRecommended={scan.diagnosis.workshopRecommended}
+          />
+          <RepairJobSection
+            scanId={scan.id}
+            diagnosisId={scan.diagnosis.id}
+            family={scan.diagnosis.repairFamily}
+          />
+        </ProGate>
       )}
 
       <section className="rounded-card border border-line bg-surface p-5 shadow-sm">

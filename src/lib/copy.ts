@@ -280,6 +280,78 @@ export const APP_COPY = {
     unnamed: "Unnamed car",
     yearPrefix: "Year",
   },
+  /* iMechanic Pro — the paid tier (S6b). Every gate in the app is ONE
+     component (`ProUpgradePrompt`) using these strings, so the paywall speaks
+     with one voice: what Pro adds, what stays free, and where to go.
+     No lock icons, no countdowns, no scarcity — the free surfaces above a gate
+     are never blurred, dimmed or badged. */
+  pro: {
+    name: "iMechanic Pro",
+    eyebrow: "iMechanic Pro",
+    /* /app/pro screen */
+    pageTitle: "iMechanic Pro",
+    pageDescription:
+      "The parts of iMechanic that go beyond reading codes. Whatever you choose, reading codes and clearing them stays free.",
+    freeHeading: "Free, always",
+    freeItems: [
+      "Connect your adapter and read the codes",
+      "Plain-English meaning for every code we know",
+      "The severity verdict: drive on, repair soon, or stop driving",
+      "Clearing codes, with the honest warnings",
+      "Your 3 most recent scans and 1 vehicle",
+    ],
+    proHeading: "What Pro adds",
+    proItems: [
+      "AI root cause, with its reasoning and a confidence figure",
+      "The DIY-vs-workshop cost decision for the repair",
+      "Guided repair steps, the tools you need, and a re-scan to verify",
+      "Your full scan history",
+      "As many vehicles as you own",
+    ],
+    /* The one reassurance that must appear with every gate. */
+    freeNote:
+      "Reading codes, the severity verdict and clearing codes stay free — always.",
+    cta: "See iMechanic Pro",
+    checking: "Checking your plan…",
+    checkError:
+      "We couldn't check your plan just now, so Pro features stay hidden for the moment. Your free verdict and codes are unaffected.",
+    retry: "Check again",
+    aiTitle: "AI root cause is part of iMechanic Pro",
+    aiBody:
+      "Pro asks the AI for the most likely root cause behind your codes, with its reasoning, a confidence figure and what to check first. The rulebook verdict above stands on its own.",
+    repairTitle: "The repair decision and guided steps are part of iMechanic Pro",
+    repairBody:
+      "Pro shows what this repair usually costs as a DIY-vs-workshop band, then walks you through the fix step by step with the tools you need.",
+    historyTitle: "Your full scan history is part of iMechanic Pro",
+    historyBody: (hidden: number) =>
+      `The free plan shows your 3 most recent scans. ${hidden} older ${
+        hidden === 1 ? "scan is" : "scans are"
+      } saved but not shown here.`,
+    vehicleTitle: "More vehicles are part of iMechanic Pro",
+    vehicleBody: (hidden: number) =>
+      `The free plan keeps 1 vehicle in the garage. Your other ${hidden} ${
+        hidden === 1 ? "vehicle is" : "vehicles are"
+      } saved but not shown here.`,
+    vehicleAddNote:
+      "The free plan keeps 1 vehicle in the garage. iMechanic Pro keeps as many as you own.",
+    /* Upgrade surface (/app/pro) — prices themselves come from market.ts. */
+    bandsHeading: "Choose a band",
+    bandsIntro:
+      "These are three prices for the same iMechanic Pro during the beta. What will tell the bands apart is not decided yet, so pick whichever looks right to you.",
+    annualSuffix: "per year",
+    monthlySuffix: "per month",
+    upgradeButton: "Upgrade",
+    upgrading: "Opening Stripe…",
+    checkoutError:
+      "We couldn't start checkout just now — nothing was charged. Try again.",
+    notConfiguredHeading: "Payments aren't set up yet",
+    notConfiguredBody:
+      "Card payments aren't connected yet, so there is nothing to buy and no button to press. The prices above are a preview: when payments go live you'll be able to subscribe from here.",
+    stripeNote:
+      "Payment runs through Stripe's secure checkout — we never see your card number.",
+    testModeNote:
+      "Beta: checkout runs on Stripe in test mode, so no card is charged and no money moves.",
+  },
   account: {
     title: "Account",
     description: "Your email, your country, your subscription.",
@@ -295,5 +367,38 @@ export const APP_COPY = {
     signedOutDescription:
       "Your email, your country and your subscription live here once you're signed in.",
     signInButton: "Sign in with email",
+    /* Plan block (S6b) — sourced from `getEntitlement()`, never from the URL. */
+    planHeading: "Your plan",
+    planFreeName: "Free plan",
+    planFreeBody:
+      "Codes, their meaning, the severity verdict and clearing them — free, always.",
+    planProName: "iMechanic Pro",
+    planStatus: {
+      trialing: "Trial",
+      active: "Active",
+      past_due:
+        "Payment failed — Pro is paused until the payment goes through.",
+      canceled: "Canceled — Pro is not active.",
+      incomplete: "Checkout was not completed — Pro is not active.",
+      incomplete_expired: "Checkout expired — Pro is not active.",
+    },
+    planBand: (band: string) => `Band ${band.toUpperCase()}`,
+    planBandUnknown: "Band not reported",
+    planRenews: "Renews",
+    planTrialEnds: "Trial ends",
+    planPeriodEnd: "Renewal date not reported yet",
+    planUpgradeCta: "See iMechanic Pro",
+    planManageNote:
+      "Billing runs through Stripe. Changing or cancelling isn't self-serve yet — it will be before launch.",
+    planLoading: "Checking your plan…",
+    planUnavailable: "We couldn't check your plan just now.",
+    planRetry: "Check again",
+    /* Checkout return notes. Honest by construction: the Pro state above comes
+       from `getEntitlement()`, so a success URL never asserts an entitlement
+       by itself. */
+    checkoutSuccess:
+      "Checkout complete. If your subscription is active, it shows above — this page reads your real status, not this message.",
+    checkoutCanceled:
+      "Checkout was canceled — nothing was charged and your plan is unchanged.",
   },
 } as const;

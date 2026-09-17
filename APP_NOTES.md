@@ -708,3 +708,99 @@ needed.** No paywall/gating in components — that is S6b, which consumes the
   honestly reports "not configured yet" and no subscription can be recorded, so
   Pro stays off for everyone; and the real (live) product/price ids pasted into
   `stripe-catalog.ts` when the live Stripe account is connected.
+
+## S6b — Pro upgrade UI + paywall gating
+Slice S6b is the UI half of iMechanic Pro: the upgrade surface, the gates that
+enforce the free/Pro boundary, and the account-page plan block. It adds no
+migration and does not change S6a's server functions (one additive field, below).
+
+- **One gate, one voice.** `src/components/pro/pro-prompt.tsx` exports
+  `ProUpgradePrompt` — the ONLY paywall surface in the app. It names the feature
+  in words, says what Pro adds, always repeats what stays free
+  (`APP_COPY.pro.freeNote`) and links to `/app/pro`. It is an explicit card
+  rendered *instead of* a Pro feature, never a blur, dim, disabled control or
+  lock badge over free content; `LockIcon` is still unused. A `compact` variant
+  (no free-note line) is used inside the vehicle picker. `PlanUnknownNote` is the
+  honest loading/error surface.
+- **`ProGate`** (`src/components/pro/pro-gate.tsx`) is the enforcement point:
+  Pro → children render exactly as before; free → the prompt; loading/error →
+  the unknown-entitlement note. It fails CLOSED (an unknown entitlement never
+  unlocks a Pro surface) and never tells a user they are on the free plan when
+  the answer is unknown.
+- **`useEntitlement()`** (`src/lib/entitlement.ts`) wraps S6a's
+  `getEntitlement()` in three states (loading / ready / error) plus `reload()`.
+  One lookup per screen, shared by every gate on it. Gates are client-side in
+  this slice: the Pro surfaces are rendering of the user's own data, and the
+  Pro *actions* (the AI call) are the server's business.
+- **`/app/pro`** (`src/routes/app/pro.tsx` + `src/components/pro/pro-plan.tsx`)
+  — free-first: a green "Free, always" card, then "What Pro adds", then the
+  upgrade panel. The panel has three states driven by the server: already Pro →
+  the current status (band, price from `PRICE_BANDS`, renewal date, status word);
+  free with Stripe → the three preview bands, each with its own Upgrade action
+  that calls `createCheckoutSession({ bandId })` and navigates to the returned
+  URL, printing any server refusal VERBATIM; free without Stripe → "Payments
+  aren't set up yet" with the bands shown as information and **no button at all**
+  (a dead button that looks live would be a lie). `PRICING_PREVIEW_NOTE` is
+  always shown. Band labels carry no invented tier features: the copy states
+  plainly that the three bands are three prices for the same Pro during the beta
+  and that what tells them apart is not decided yet.
+- **Honesty about test mode.** `getEntitlement()` gained one ADDITIVE field,
+  `stripeTestMode` (`src/server/pro.ts`), true only when the configured key is a
+  Stripe test key (`_test_`; anything unrecognised — including a live key —
+  reports false). The upgrade panel uses it to say "checkout runs on Stripe in
+  test mode — no card is charged and no money moves" only when that is actually
+  true, and the neutral "payment runs through Stripe" line otherwise. S6a's
+  fields are unchanged.
+- **Gated features.** AI root cause panel, and the Decide cost card + Act guided
+  repair + Verify, on the scan result view. Decide/Act/Verify are gated as ONE
+  block (they are the same "plan the repair" step of the golden path), which is
+  why a free user sees one Pro card there rather than three near-identical ones.
+  The free verdict, the reason list, the fault-code cards and clear-codes
+  (with their safety warnings) are untouched: no dimming, no badge, no lock, and
+  the free verdict still renders ABOVE every gate.
+- **Free-tier limits (never silent).** `src/lib/pro-limits.ts` is the single
+  expression of the boundary: `FREE_SCAN_HISTORY = 3`, `FREE_VEHICLES = 1`, and
+  `visibleForPlan` / `visibleScans` / `visibleVehicles` / `canAddFreeVehicle`.
+  History keeps the 3 newest (`listScans` is newest-first) and Vehicles keeps the
+  first stored one; both screens keep showing the REAL total in their heading and
+  disclose the hidden count in a Pro card ("N older scans are saved but not shown
+  here"). The add-vehicle form and the scan screen's "add this car" form are
+  hidden while a free user holds their one vehicle, with the Pro note in their
+  place — never a form that is filled in and then refused. No server pagination
+  changed (SCAN_HISTORY_LIMIT stays 50 and every query stays user-scoped).
+- **Account screen** (`src/routes/app/account.tsx`): a plan block — Pro status
+  card (band + renewal date) when Pro, otherwise the free-plan card with the way
+  to upgrade, and an honest status line when a subscription exists but does not
+  grant Pro (past_due / canceled / incomplete…). It reads `?checkout=success` /
+  `?checkout=canceled` via `validateSearch` and shows the matching note, asking
+  `getEntitlement()` again immediately and once more after 3s (the webhook can
+  land after the redirect). **The plan shown is never derived from the URL
+  parameter** — a hand-typed `?checkout=success` cannot make the app claim Pro.
+- **Design-system gallery** (`/app/_gallery`) gained a "iMechanic Pro states"
+  section with static sample entitlements (Pro status, free card, both prompt
+  variants, the not-configured panel) so every paywall state can be reviewed
+  side by side without touching Stripe.
+- **Known follow-up for the lead (deliberately NOT done in S6b).** Enforcement
+  here is client-side, as the slice brief asked: a free user's *browser* is what
+  refuses to render the Pro surfaces, keeps 3 scans and 1 vehicle. The
+  corresponding server functions (`getAiDiagnosis` — which spends AI credits —
+  and `createVehicle`) are still callable directly by a signed-in free user, and
+  `listScans`/`listVehicles` still return the full set over the wire. Server-side
+  enforcement of the Pro boundary (entitlement check inside those handlers, plus
+  pagination that respects the tier) is a separate, small slice of its own — it
+  needs an honest UI state for "your plan doesn't include this" that does not
+  reuse the AI-unavailable copy.
+- **Verification.** `bunx tsc --noEmit` → 0 errors; `bun run build` clean;
+  `bun run test` → **132 passed / 16 skipped** (S6a's 122 + 10 new pure tests in
+  `tests/pro-limits.test.ts`; the same 3 DB suites abort on the missing
+  `TEST_DATABASE_URL`). Browser-verified at 390×844 and desktop with a throwaway
+  `zz-s6b-verify@imechanic.test` user (minted session, test rows removed
+  afterwards): as a FREE user the scan screen showed the free verdict + codes +
+  clear-codes untouched with the two Pro cards in place of AI and Decide/Act,
+  History showed 3 of 4 scans plus "1 older scan is saved but not shown here",
+  Vehicles allowed the first car and then replaced the form with the Pro note,
+  and `/app/pro` showed the three bands, the preview note and the test-mode note;
+  after inserting one `subscriptions` row (active, band b) the same screens showed
+  the AI panel, the cost card, the guided-repair section, all 4 scans and the Pro
+  status card with band B and the renewal date; zero console errors in either
+  state (only the dev server's known Vite HMR websocket noise).

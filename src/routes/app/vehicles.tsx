@@ -9,8 +9,11 @@ import {
   SpinnerIcon,
   VehiclesIcon,
 } from "../../components/icons";
+import { ProUpgradePrompt } from "../../components/pro/pro-prompt";
 import { Button } from "../../components/ui/button";
 import { APP_COPY } from "../../lib/copy";
+import { useEntitlement } from "../../lib/entitlement";
+import { canAddFreeVehicle, visibleVehicles } from "../../lib/pro-limits";
 import {
   createVehicle,
   listVehicles,
@@ -153,6 +156,15 @@ function AppVehicles() {
 
   const vehicles = state.kind === "ready" ? state.vehicles : [];
   const isEmpty = state.kind === "ready" && vehicles.length === 0;
+  /* S6b: the free garage holds 1 vehicle. The list this screen already loaded is
+     limited client-side, the real total is still shown, and the hidden count is
+     disclosed — never a silently shorter garage. */
+  const entitlement = useEntitlement();
+  const pro =
+    entitlement.state.kind === "ready" && entitlement.state.entitlement.pro;
+  const listed = state.kind === "ready" ? visibleVehicles(vehicles, pro) : null;
+  const atFreeLimit = state.kind === "ready" && !pro && vehicles.length > 0;
+  const canAdd = pro || canAddFreeVehicle(vehicles.length);
 
   return (
     <div className="space-y-6">
@@ -205,20 +217,33 @@ function AppVehicles() {
         />
       )}
 
-      {state.kind === "ready" && vehicles.length > 0 && (
+      {state.kind === "ready" && vehicles.length > 0 && listed && (
         <>
           <h2 className="text-xs font-semibold uppercase tracking-wider text-fg-subtle">
             {v.countLabel(vehicles.length)}
           </h2>
           <ul className="space-y-3">
-            {vehicles.map((vehicle) => (
+            {listed.visible.map((vehicle) => (
               <VehicleRow key={vehicle.id} vehicle={vehicle} />
             ))}
           </ul>
         </>
       )}
 
-      {state.kind === "ready" && !formOpen && vehicles.length > 0 && (
+      {/* The free garage limit, in words: what the plan keeps, and how many of
+          the saved vehicles are not shown here. */}
+      {atFreeLimit && listed && (
+        <ProUpgradePrompt
+          title={APP_COPY.pro.vehicleTitle}
+          description={
+            listed.limited
+              ? APP_COPY.pro.vehicleBody(listed.hiddenCount)
+              : APP_COPY.pro.vehicleAddNote
+          }
+        />
+      )}
+
+      {state.kind === "ready" && !formOpen && vehicles.length > 0 && canAdd && (
         <Button
           fullWidth
           variant="secondary"
