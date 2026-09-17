@@ -240,6 +240,46 @@ export const APP_COPY = {
     hoursAgo: (n: number) => `${n} hour${n === 1 ? "" : "s"} ago`,
     daysAgo: (n: number) => `${n} day${n === 1 ? "" : "s"} ago`,
   },
+  vehicles: {
+    title: "Vehicles",
+    /* Honest and modest (phase 2b): a vehicle is a record the user adds and
+       nothing more is claimed for it — no "unlock", no plan/limit talk. */
+    description:
+      "The cars you've added — make, model and, if you know it, the year.",
+    loading: "Loading your vehicles…",
+    errorTitle: "We couldn't load your vehicles",
+    errorDescription:
+      "Your saved vehicles are still there — this screen just couldn't read them. Try again.",
+    retry: "Try again",
+    emptyEyebrow: "Empty",
+    emptyTitle: "No vehicles yet",
+    emptyDescription:
+      "Add a car and it shows up here. Make and model are all that's needed; the year is optional.",
+    emptyAction: "Add a vehicle",
+    addButton: "Add vehicle",
+    formTitle: "Add a vehicle",
+    formHint: "Stored as make, model and year. You can add more than one.",
+    makeLabel: "Make",
+    makeHint: "For example VW",
+    modelLabel: "Model",
+    modelHint: "For example Golf",
+    yearLabel: "Year (optional)",
+    yearPlaceholder: "For example 2016",
+    makeRequired: "Enter the make — for example VW.",
+    modelRequired: "Enter the model — for example Golf.",
+    yearInvalid: "Enter a four-digit year like 2016, or leave it empty.",
+    saveButton: "Save vehicle",
+    saving: "Saving…",
+    cancel: "Cancel",
+    saveError:
+      "We couldn't save that vehicle — nothing was stored. Try again.",
+    saved: "Vehicle added.",
+    refreshError:
+      "The vehicle was added, but this list couldn't refresh. Try again to see it.",
+    countLabel: (n: number) => `${n} vehicle${n === 1 ? "" : "s"}`,
+    unnamed: "Unnamed car",
+    yearPrefix: "Year",
+  },
   account: {
     title: "Account",
     description: "Your email, your country, your subscription.",
