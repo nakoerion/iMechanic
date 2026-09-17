@@ -105,7 +105,7 @@ function publicOriginFallbacks(): string[] {
   ];
 }
 
-function siteOrigin(): string {
+export function siteOrigin(): string {
   const override = process.env.PUBLIC_ORIGIN?.trim().replace(/\/+$/, "");
   if (override) return override.startsWith("http") ? override : `https://${override}`;
 

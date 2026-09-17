@@ -617,3 +617,94 @@ runtime behaviour, query string, SQL or caller shape changed.
   three DB suites (migrate/schema/obd) aborting on the missing
   `TEST_DATABASE_URL` — unchanged baseline. PR: typecheck-only, no publish
   needed since nothing about the served output changed.
+
+## S6a — Stripe backend for the Pro tier (backend only, no UI)
+Slice S6a wires Stripe against the entitlement schema that already exists
+(`users.stripe_customer_id`, `subscriptions`, `stripe_events` in
+`db/migrations/002_s1_1_integrity.sql`). **No migration was added and none was
+needed.** No paywall/gating in components — that is S6b, which consumes the
+`getEntitlement()` server fn.
+- **`bun add stripe`** (`^22.6.2`, production dependency). `src/server/stripe.ts`
+  is the only module that imports the SDK: a lazy client factory reading
+  `process.env.STRIPE_SECRET_KEY`, throwing the honest "not set — connect the
+  Stripe account" error (mirrors `src/db.ts`). Never committed, never read in a
+  component.
+- **`bun run stripe:ensure`** (`scripts/ensure-stripe-products.ts` →
+  `src/server/stripe-ensure.ts`) is the idempotent catalogue routine. Amounts come
+  from `PRICE_BANDS` in `src/lib/market.ts`; the routine finds the product by our
+  `imechanic_product=pro` marker, each price by its `imechanic_band` marker (or
+  adopts an identical untagged price), creates only what is missing, archives a
+  stale price when a band amount changes, and exits non-zero if what Stripe holds
+  no longer matches market.ts. Run against the sandbox it created product
+  `prod_VHIrXSpHFehb4l` and prices band a `price_1UGkG61sse5lyQAYSanAj0G3` (€31.99),
+  b `price_1UGkG61sse5lyQAYnSNmWwf5` (€39.99), c `price_1UGkG71sse5lyQAYvbX5SY3Q`
+  (€47.99) — annual, EUR, recurring. The ids live in `src/server/stripe-catalog.ts`
+  as config; a second run reported all four as `existing` (no duplicates). No
+  amount is stored anywhere but `market.ts`.
+- **`createCheckoutSession({ bandId })`** (`src/server/pro.ts` → `pro-checkout.ts`):
+  requires a signed-in user, validates `bandId` against `PRICE_BANDS`, looks up or
+  creates the Stripe customer (persisting `users.stripe_customer_id`, guarded
+  `WHERE ... IS NULL` so concurrent checkouts cannot overwrite each other),
+  creates a `mode: 'subscription'` session for the band's configured price with
+  `success_url`/`cancel_url` built from `siteOrigin()` — the same helper the
+  magic-link emails use (now exported from `auth-core.ts`; no behaviour change) —
+  and returns `{ url }`. It also stamps `client_reference_id` and
+  `subscription_data.metadata.userId/bandId` so the webhook can still match the
+  subscription if the customer link is ever lost. A stale customer id from a reset
+  sandbox is replaced (guarded) instead of failing the customer permanently.
+- **Webhook `POST /api/stripe-webhook`** (`src/routes/api/stripe-webhook.ts` — a
+  TanStack Start server route with `server.handlers`, the first `src/routes/api/*`
+  in the repo — → `src/server/stripe-webhook.ts`, imported dynamically so the SDK
+  and `sql()` stay out of the client bundle): verifies `Stripe-Signature` against
+  `STRIPE_WEBHOOK_SECRET`, inserting the raw body first; a missing secret is an
+  honest `503 not configured`, a bad signature a `400`. Idempotency is the
+  `stripe_events` insert-first gate: a replayed event id is acked `200
+  {duplicate:true}` without re-applying; if APPLYING a verified event throws, the
+  ledger row is removed and a `500` returned so Stripe's retry can still do the
+  work. Handles `checkout.session.completed` (subscription mode only; a one-off
+  `mode:'payment'` session is ignored) and `customer.subscription.created/updated/
+  deleted`; everything else is acked and ignored.
+- **Status and band mapping** (`src/server/pro-core.ts`, SDK-free): Stripe status
+  → the CHECK vocabulary one-to-one, with the two Stripe statuses our CHECK cannot
+  hold mapped to the nearest non-granting value and logged (`unpaid`→`past_due`,
+  `paused`→`canceled`); an absent/unknown status skips the write rather than
+  inventing one. Band comes from matching the price id against the catalogue;
+  an unknown price stores `price_band = NULL` (never attributes a band it cannot
+  prove). The period end is read from both the subscription and its items, so it
+  works on pre- and post-"basil" API versions. No local `users` row for the
+  Stripe customer → logged and acked, nothing written. The schema's one-active-
+  subscription-per-user rule is honoured by retiring the previous active row when
+  a *newer active* subscription arrives.
+- **`hasActivePro(userId)` / `getEntitlement()`**: `hasActivePro` is true iff the
+  user has a subscriptions row in `('trialing','active')`; `getEntitlement()` (a
+  server fn) returns `{ signedIn, pro, status, bandId, currentPeriodEnd,
+  stripeConfigured }` and never throws for a signed-out visitor. `currentPeriodEnd`
+  is converted to a string for the client.
+- **One real bug found and fixed while verifying:** `webhooks.constructEvent()` is
+  synchronous and verifies through SubtleCrypto, which is async-only in the runtime
+  this site is served by — it threw for *every* delivery, valid or not. Now uses
+  `await webhooks.constructEventAsync()`, which works there and on Node.
+- **Verification (live, then cleaned up).** `bunx tsc --noEmit` → 0 errors;
+  `bun run build` clean; `bun run test` → **122 passed / 16 skipped** (baseline
+  104 + 18 new pure tests in `tests/pro.test.ts`; the 3 DB suites still abort on
+  the missing `TEST_DATABASE_URL`). Against the running site:
+  `POST /api/stripe-webhook` with no secret → `503`, `GET` → `405`. Against the
+  sandbox and the live database (a throwaway `zz-s6a-verify@imechanic.test` user,
+  every row and Stripe object deleted afterwards, all checks passed): a real
+  Checkout Session was created (test mode, no card, nothing charged) with
+  `mode=subscription`, `amount_total=3999 eur` from band b, `metadata.bandId=b`,
+  `client_reference_id` = our user, and both success/cancel URLs returning into
+  `/app/account`; a forged signature was rejected `400` and never reached the
+  ledger; signed `customer.subscription.updated` → `200 written`, the
+  `stripe_events` row present, `hasActivePro` true, `status=active`,
+  `price_band=b`, `current_period_end` stored; a replay → `200 duplicate` with no
+  second row; `checkout.session.completed` (expanded subscription) → written;
+  a `mode:'payment'` session → ignored; an unknown price → `price_band NULL`; a
+  newer active subscription retired the old row (exactly one active row);
+  a customer with no local user → acked, nothing written; and
+  `customer.subscription.deleted` → `hasActivePro` false.
+- **Still needed from the owner (not a code problem):** `STRIPE_WEBHOOK_SECRET`
+  (register the endpoint, enable the four event types) — until then the route
+  honestly reports "not configured yet" and no subscription can be recorded, so
+  Pro stays off for everyone; and the real (live) product/price ids pasted into
+  `stripe-catalog.ts` when the live Stripe account is connected.
