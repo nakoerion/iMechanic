@@ -1,11 +1,8 @@
 import { useState } from "react";
 import { AlertIcon, CheckIcon } from "../icons";
 import { APP_COPY } from "../../lib/copy";
-import {
-  REPAIR_GUIDANCE_NOTE,
-  repairGuideFor,
-  type RepairFamily,
-} from "../../lib/repair";
+import { type RepairFamily } from "../../lib/cost";
+import { REPAIR_GUIDANCE_NOTE, repairGuideFor } from "../../lib/repair";
 
 /**
  * GuidedRepairPanel — the Act surface (S5 UI).

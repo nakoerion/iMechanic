@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { ScreenHeader } from "../../components/app-shell";
-import { Button } from "../../components/ui/button";
 import { APP_COPY } from "../../lib/copy";
 import { verifyMagicLink } from "../../server/auth";
 

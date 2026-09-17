@@ -718,13 +718,17 @@ export async function saveScanCore(
   // (source='rules', explicit verdict, fixed confidence). The catalog
   // metadata the engine sees is read back from dtc_catalog so the row
   // always matches what the result view renders.
-  const catalogRows = await db<{
-    code: string;
-    title: string | null;
-    system: string | null;
-    generic_cause: string | null;
-    severity_default: string | null;
-  }>`
+  // Shape fix (type-only): the tag returns an ARRAY of catalog rows and the
+  // mapper below calls `.map`/`.filter` on it, so the generic must be `[]`.
+  const catalogRows = await db<
+    {
+      code: string;
+      title: string | null;
+      system: string | null;
+      generic_cause: string | null;
+      severity_default: string | null;
+    }[]
+  >`
     SELECT code, title, system, generic_cause, severity_default FROM dtc_catalog
     WHERE code = ANY(${codes.map((c) => c.code)})`;
   const catalogMap = new Map<string, CatalogEntry>(

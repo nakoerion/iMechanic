@@ -47,7 +47,12 @@ function AppAccount() {
     try {
       await updateCountry({ data: { country: next } });
       setCountryState("saved");
-      setUser((u) => (u ? { ...u, country: next } : u));
+      // `user` can also be the "loading" sentinel — only a real user object
+      // may be spread. Returning the sentinel unchanged is the same intent
+      // (there is nothing to update before the user resolves).
+      setUser((u) =>
+        u && typeof u === "object" ? { ...u, country: next } : u,
+      );
     } catch {
       setCountryState("error");
       setCountry((prev) => prev); // keep last selection; error surfaced below

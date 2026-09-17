@@ -10,6 +10,33 @@
 // the takeover works across user boundaries.
 import handler from "./dist/server/server.js";
 
+/* Bun's runtime globals are not part of the TS DOM lib. Rather than pull in
+ * `@types/bun` (whose global set would then be applied to the WHOLE program
+ * alongside `vite/client` + DOM, and could clash with them), the small surface
+ * this file actually uses is declared here. These are type-only declarations:
+ * the runtime behaviour of `import.meta.dir`, `Bun.$`, `Bun.serve`,
+ * `Bun.file` and `Bun.sleep` is untouched. This file is the dev/prod server
+ * (`bun run serve.ts`), not part of `vite build`. */
+declare global {
+  interface ImportMeta {
+    /** Absolute directory of this module (Bun-specific). */
+    dir: string;
+  }
+}
+declare const Bun: {
+  $(
+    strings: TemplateStringsArray,
+    ...values: unknown[]
+  ): { quiet(): { nothrow(): Promise<unknown> } };
+  sleep(ms: number): Promise<void>;
+  file(path: string): Blob & { exists(): Promise<boolean> };
+  serve(options: {
+    port: number;
+    hostname: string;
+    fetch: (req: Request) => Response | Promise<Response>;
+  }): unknown;
+};
+
 // Pinned, NOT read from the environment. The published preview URL
 // (<label>.<PUBLIC_SITE_DOMAIN>) is reverse-proxied to 0.0.0.0:3000 inside the
 // sandbox, so the default site MUST bind there. Bun auto-loads .env files, so

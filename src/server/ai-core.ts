@@ -122,10 +122,13 @@ export function parseAiResponseBody(body: unknown): AiDiagnosisContent | null {
     const confidence = clampConfidence(p.confidence, 50);
     const causes: AiRankedCause[] = Array.isArray(p.causes)
       ? (p.causes as unknown[])
-          .filter(
-            (c): c is Record<string, unknown> =>
-              typeof c === "object" && c !== null && typeof c.cause === "string" && (c.cause as string).trim().length > 0,
-          )
+          .filter((c): c is Record<string, unknown> => {
+            if (typeof c !== "object" || c === null) return false;
+            // `cause` is not a member of `object` — read it through an
+            // optional-property cast and keep the exact same test.
+            const cause = (c as { cause?: unknown }).cause;
+            return typeof cause === "string" && cause.trim().length > 0;
+          })
           .map((c) => ({
             cause: (c.cause as string).trim().slice(0, 500),
             confidence: clampConfidence(c.confidence, confidence),

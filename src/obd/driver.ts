@@ -16,9 +16,9 @@
  *     code to the server, which persists it as `source: 'manual'`.
  */
 
-import type { DtcStatus } from "./dtc";
+import type { DtcStatus } from "../lib/dtc";
 import { isNativeRuntime } from "../native/runtime";
-export type { DtcStatus } from "./dtc";
+export type { DtcStatus } from "../lib/dtc";
 
 /** One code read from the adapter, in ready-to-persist shape. */
 export type ObdCode = {
