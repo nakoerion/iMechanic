@@ -112,7 +112,7 @@ public class IMechanicBlePlugin: CAPPlugin, CAPBridgedPlugin {
      * at launch, and we wait for the answer instead of reporting
      * "notDetermined" as if it were a decision.
      */
-    @objc func requestPermissions(_ call: CAPPluginCall) {
+    @objc override func requestPermissions(_ call: CAPPluginCall) {
         ensureCentral()
         let decision = Self.permissionState()
         if decision != "prompt" {

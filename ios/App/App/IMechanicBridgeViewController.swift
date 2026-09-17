@@ -17,9 +17,10 @@ import UIKit
  * `capacitorDidLoad()` runs immediately after the bridge is created, which is
  * the earliest point at which plugins can be registered.
  */
+@objc(IMechanicBridgeViewController)
 class IMechanicBridgeViewController: CAPBridgeViewController {
 
-    override open func capacitorDidLoad() {
+    override func capacitorDidLoad() {
         bridge?.registerPluginInstance(IMechanicBlePlugin())
     }
 }

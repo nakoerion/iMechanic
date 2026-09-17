@@ -596,6 +596,11 @@ function nativeBleError(err: unknown): ObdError {
         "iMechanic is not allowed to use Bluetooth.",
         "Allow Bluetooth for iMechanic in your phone's settings, then try again.",
       );
+    case "PERMISSION_PENDING":
+      return new ObdError(
+        "iMechanic is still waiting for Bluetooth permission.",
+        "Tap Allow on the Bluetooth prompt, then try connecting again.",
+      );
     case "NO_DEVICE":
       return new ObdError(
         "No Bluetooth OBD adapter was found.",
@@ -624,6 +629,48 @@ function nativeBleError(err: unknown): ObdError {
 }
 
 /**
+ * How many times we ask the native bridge for a permission decision. iOS
+ * answers `requestPermissions` honestly: "prompt" means **the system dialog is
+ * still on screen**, not "granted". Treating "prompt" as consent used to send
+ * us straight into `scan()`, which could only fail with "Bluetooth is switched
+ * off" — a confusing error that blamed the user's radio for a permission the
+ * user had not answered yet.
+ *
+ * Asking again re-reads the OS state, so an answer that lands while we wait is
+ * picked up immediately. Bounded, so the connect step can never hang.
+ */
+const NATIVE_PERMISSION_ATTEMPTS = 3;
+/** Pause between asks: long enough to be a real wait, short enough to stay alive. */
+const NATIVE_PERMISSION_RETRY_MS = 1_500;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Resolve a native Bluetooth permission to "granted", or fail with the honest
+ * reason: denied, no radio, or still unanswered after the final ask. Never
+ * reports a pending prompt as a decision either way.
+ */
+async function awaitNativeBlePermission(bridge: IMechanicBleBridge): Promise<void> {
+  for (let attempt = 1; attempt <= NATIVE_PERMISSION_ATTEMPTS; attempt += 1) {
+    const { bluetooth } = await bridge.requestPermissions();
+    if (bluetooth === "granted") return;
+    if (bluetooth === "denied") {
+      throw new BleBridgeError("PERMISSION_DENIED", "Bluetooth permission denied");
+    }
+    if (bluetooth === "unsupported") {
+      throw new BleBridgeError("NOT_SUPPORTED", "No Bluetooth LE radio");
+    }
+    if (attempt < NATIVE_PERMISSION_ATTEMPTS) await delay(NATIVE_PERMISSION_RETRY_MS);
+  }
+  throw new BleBridgeError(
+    "PERMISSION_PENDING",
+    "The Bluetooth permission prompt is still waiting for an answer.",
+  );
+}
+
+/**
  * Permission → scan → connect through the native bridge, returning the line
  * transport the driver then drives. Every failure is an ObdError whose copy
  * matches the failure (never a generic "something went wrong"), and nothing
@@ -637,13 +684,7 @@ async function connectNativeBle(): Promise<LineTransport> {
     throw nativeBleError(err);
   }
   try {
-    const permission = await bridge.requestPermissions();
-    if (permission.bluetooth === "denied") {
-      throw new BleBridgeError("PERMISSION_DENIED", "Bluetooth permission denied");
-    }
-    if (permission.bluetooth === "unsupported") {
-      throw new BleBridgeError("NOT_SUPPORTED", "No Bluetooth LE radio");
-    }
+    await awaitNativeBlePermission(bridge);
     const { devices } = await bridge.scan({ timeoutMs: NATIVE_SCAN_TIMEOUT_MS });
     const device = pickAdapterDevice(devices);
     if (!device) throw new BleBridgeError("NO_DEVICE", "No adapter found");

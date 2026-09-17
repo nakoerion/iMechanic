@@ -107,6 +107,12 @@ export type BleErrorCode =
   /** This device has no usable Bluetooth LE radio, or it is switched off. */
   | "NOT_SUPPORTED"
   | "PERMISSION_DENIED"
+  /**
+   * Raised by the JS layer, not the native bridge: iOS reports "prompt" while
+   * its permission dialog is still on screen, and we refuse to treat that as
+   * consent. The user has not answered yet — say so, don't blame the radio.
+   */
+  | "PERMISSION_PENDING"
   | "NO_DEVICE"
   | "CONNECT_FAILED"
   /** Nothing connected — write() before connect(). */

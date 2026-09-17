@@ -83,6 +83,19 @@ const config: CapacitorConfig = {
       scanTimeoutMs: 12_000,
       /** ELM327 clones answer in well under a second; 8s is a lost link. */
       commandTimeoutMs: 8_000,
+      /**
+       * How long the native bridge waits for the adapter's Bluetooth link to
+       * open (Swift/Kotlin default 15s). Declared here so the values the
+       * native plugins actually read are all visible in one place — see
+       * APP_NOTES ("scanTimeoutMs / commandTimeoutMs / connectTimeoutMs").
+       */
+      connectTimeoutMs: 15_000,
+      /**
+       * How long the bridge waits for the user to answer the iOS Bluetooth
+       * permission prompt before reporting honestly that it is still
+       * unanswered (Swift default 20s). The system dialog stays on screen.
+       */
+      permissionTimeoutMs: 20_000,
     },
   },
 };

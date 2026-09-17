@@ -117,7 +117,7 @@ class IMechanicBlePlugin : Plugin() {
     // MARK: - Permissions
 
     @PluginMethod
-    fun requestPermissions(call: PluginCall) {
+    override fun requestPermissions(call: PluginCall) {
         if (bluetoothAdapter() == null) {
             call.resolve(JSObject().put("bluetooth", "unsupported"))
             return
