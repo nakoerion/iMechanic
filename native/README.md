@@ -63,6 +63,13 @@ Failure codes, identical on all three sides: `NOT_NATIVE`,
 message + hint pairs (`src/obd/elm327-live.ts`), and the app falls back to the
 free demo mode rather than inventing a diagnosis.
 
+One code is **JS-layer only**, not a native one: `PERMISSION_PENDING`. iOS
+answers `requestPermissions` with `"prompt"` while the system dialog is still
+on screen, and the web layer must not read that as consent — so
+`connectNativeBle()` re-asks (bounded, 3 attempts) and, if the user still has
+not answered, reports `PERMISSION_PENDING` instead of running `scan()` and
+blaming the radio. No native plugin ever rejects with it.
+
 ## Building the wrappers
 
 Prerequisites (not installable on the build machine this repo was authored on):
