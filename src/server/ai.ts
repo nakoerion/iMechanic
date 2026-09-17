@@ -7,13 +7,17 @@
  * or the Neon handle) are loaded with DYNAMIC imports inside the handler
  * so they never reach the client bundle.
  *
- * Contract: getAiDiagnosis({ scanId }) resolves the caller, loads the
- * scan's context (codes + catalog + vehicle + rules verdict), returns the
- * existing source='ai' row when one exists (idempotency — no double
- * billing), otherwise calls the LLM. On success it inserts a second
- * diagnoses row with source='ai' and the SAME verdict as the rules row
- * (the AI never overrides the free safety verdict). On any AI failure it
- * returns { available: false, reason } and writes nothing.
+ * Contract: getAiDiagnosis({ scanId }) resolves the caller, requires an
+ * active Pro entitlement (S6d — the AI root cause is a Pro surface that spends
+ * Anthropic credits, so a free user must not be able to reach it by calling
+ * this function directly), loads the scan's context (codes + catalog + vehicle
+ * + rules verdict), returns the existing source='ai' row when one exists
+ * (idempotency — no double billing), otherwise calls the LLM. On success it
+ * inserts a second diagnoses row with source='ai' and the SAME verdict as the
+ * rules row (the AI never overrides the free safety verdict). On any AI
+ * failure it returns { available: false, reason } and writes nothing — the
+ * free fallback states (key missing / network / parse / no credits) are
+ * unchanged, and "signed-in free user" is simply one more honest refusal.
  */
 import { createServerFn } from "@tanstack/react-start";
 
@@ -40,7 +44,7 @@ export type AiDiagnosisResult =
     }
   | { available: false; reason: string };
 
-/** AI root-cause diagnosis for one scan — Pro surface, no gating here (S6). */
+/** AI root-cause diagnosis for one scan — a Pro surface (gated since S6d). */
 export const getAiDiagnosis = createServerFn({ method: "POST" })
   .validator((input: unknown) => {
     if (typeof input !== "object" || input === null) {
@@ -54,6 +58,7 @@ export const getAiDiagnosis = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }): Promise<AiDiagnosisResult> => {
     const { getCurrentUserCore } = await import("./auth-core");
+    const { hasActivePro } = await import("./pro-core");
     const {
       loadAiContextCore,
       getExistingAiRowCore,
@@ -61,10 +66,16 @@ export const getAiDiagnosis = createServerFn({ method: "POST" })
       serializeAiReasoning,
       getScanCore,
     } = await import("./scans-core");
-    const { runAiDiagnosis } = await import("./ai-core");
+    const { aiEntitlementRefusal, runAiDiagnosis } = await import("./ai-core");
     const user = await getCurrentUserCore();
     const userId = requireUserId(user);
-    // Idempotency/cost guard first: an existing AI row is returned as-is,
+    /* S6d — entitlement gate, FIRST and before any read or LLM call: the AI
+       root cause is Pro, so a signed-in free user is refused here, at the
+       server, and the UI's own gate is no longer the only boundary. A refused
+       call costs nothing and writes nothing. */
+    const refusal = aiEntitlementRefusal(await hasActivePro(userId));
+    if (refusal) return refusal;
+    // Idempotency/cost guard next: an existing AI row is returned as-is,
     // before any LLM call, so a second request never double-bills.
     const existing = await getExistingAiRowCore(userId, data.scanId);
     if (existing) {
