@@ -541,3 +541,23 @@ internally consistent and compile-*ready*, not compile-*verified*.
   native transport's round trip / lost-link / timeout paths. Still to do on a
   machine with the toolchains: first native compile (Xcode + Android SDK), and
   a real adapter round trip on a phone.
+
+## Phase 2b - Vehicles tab wired to the real backend (feat/vehicles-tab)
+
+- `src/routes/app/vehicles.tsx` is now data-driven: `listVehicles()` on mount, with
+  loading / empty / error-with-retry states following the same pattern as
+  `history.tsx` (phase 2a). The disabled "Add vehicle - coming soon" button is gone.
+- Add-vehicle form (make required, model required, year optional) posts to the
+  existing `createVehicle`, validates make+model and rejects a year outside
+  1980..current+1 (the range `createVehicleCore` keeps), then re-reads
+  `listVehicles()` so the list shows exactly what was stored. Server errors are
+  surfaced alongside the honest "nothing was stored" line.
+- Copy lives in `APP_COPY.vehicles`. No new server functions, no change to
+  `scans-core.ts`, no gating or vehicle limits ("one vehicle"/"unlimited" claims
+  deliberately absent - that is S6 and is parked).
+- Browser-verified at 390x844 against the dev server with a temporary session:
+  empty state -> add form -> empty-submit validation -> save -> list refresh shows
+  the stored record; the DB row was confirmed by query and the temp user/session/
+  vehicle were deleted afterwards.
+- `bun run build` clean; `bun run test` 104 passed / 16 skipped with only the 3 DB
+  suites aborting on the missing TEST_DATABASE_URL (unchanged baseline).
