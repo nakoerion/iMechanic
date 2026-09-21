@@ -840,3 +840,25 @@ and `tests/pro-limits.test.ts`; the same 3 DB suites abort on the missing
 verified by tsc/build/unit tests only; QA must load `/app/history`,
 `/app/vehicles` and `/app/scan` for both a free and a Pro session before
 publishing.
+
+## Android build config: `kotlinVersion` (PR #19)
+A clean checkout of `android/` could not configure at all: `android/build.gradle`
+interpolates `$kotlinVersion` in the Kotlin Gradle plugin classpath, but the only
+declaration was `ext.kotlinVersion` in `variables.gradle`.
+- **The obvious fix does not work.** Moving `apply from: "variables.gradle"` above
+  the `buildscript` block was tried first and the clean-checkout run still failed
+  on the same line: Gradle evaluates a script's `buildscript {}` block *before the
+  rest of the script body*, wherever the block sits, so no `apply from:` statement
+  in the body can supply a version that the classpath interpolates.
+- **The fix that does work:** declare it as a Gradle property in
+  `android/gradle.properties` (`kotlinVersion=2.0.21`), which is readable while
+  `buildscript` is evaluated. `build.gradle` keeps its original ordering (comment
+  only); `variables.gradle`'s unused `ext.kotlinVersion` duplicate was removed, so
+  the version is declared in exactly one place. Nothing else in the tree read it.
+- **Standing rule:** any version that a `buildscript { classpath … }` line
+  interpolates goes in `android/gradle.properties`, never in `variables.gradle`.
+- Verification used: `cd android && ./gradlew :app:help --no-daemon
+  --max-workers=1` (source `/opt/android-env.sh` first) → `BUILD SUCCESSFUL`,
+  configuring `:app` and `:capacitor-cordova-android-plugins`. This is the
+  lightweight configuration proof — a real `assemble`/`bundle` still needs the
+  toolchain in the owner's environment.
