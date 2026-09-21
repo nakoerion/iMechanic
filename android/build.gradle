@@ -9,7 +9,9 @@ buildscript {
     dependencies {
         classpath 'com.android.tools.build:gradle:8.7.2'
         classpath 'com.google.gms:google-services:4.4.2'
-        // Slice S7: the local BLE plugin (app/imechanic/ble) is Kotlin.
+        // Slice S7: the app is Kotlin. The version comes from gradle.properties,
+        // not variables.gradle — the buildscript block is evaluated before the rest
+        // of this script, so `apply from: "variables.gradle"` below is too late here.
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion"
 
         // NOTE: Do not place your application dependencies here; they belong
