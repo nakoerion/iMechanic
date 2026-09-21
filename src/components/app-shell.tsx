@@ -244,24 +244,46 @@ export function StickyActionBar({
   );
 }
 
-/** Neutral content card. The severity components bring their own borders. */
+/**
+ * Two materials, not one (A3).
+ *
+ *  - `card`  — human guidance: advice, verdicts, explanations, forms.
+ *  - `plate` — machine data: vehicle details, code metadata, money bands,
+ *              tool lists. Sunken ground, the tighter plate radius and a
+ *              denser interior (12px against the card's 20px), so a data
+ *              block reads as an instrument panel and an advice block reads
+ *              as something written for a person.
+ *
+ * Both take an edge from `--color-line`, not `--color-hairline`: the hairline
+ * is 8% ink/light and measures ~1.2:1, so as an OUTER edge it simply
+ * disappears. Hairline is for dividers *inside* a plate (see the token
+ * comment in `app.css`), which is how the restyles below use it.
+ *
+ * The material is a token swap only — no extra markup, no colour, no lift on
+ * a plate. Nothing here may be blurred, dimmed or locked: free content stays
+ * legible on either material.
+ */
+export type CardVariant = "card" | "plate";
+
+const CARD_MATERIAL: Record<CardVariant, string> = {
+  card: "rounded-card border border-line bg-surface p-5 shadow-card",
+  plate: "rounded-plate border border-line bg-surface-sunken p-3",
+};
+
+/** Neutral content block. The severity components bring their own borders. */
 export function Card({
   children,
   className,
+  variant = "card",
   as: Tag = "section",
 }: {
   children: ReactNode;
   className?: string;
+  /** `card` (default) is the existing look; `plate` is the data material. */
+  variant?: CardVariant;
   as?: "section" | "div" | "article";
 }) {
   return (
-    <Tag
-      className={cn(
-        "rounded-card border border-line bg-surface p-5 shadow-sm",
-        className,
-      )}
-    >
-      {children}
-    </Tag>
+    <Tag className={cn(CARD_MATERIAL[variant], className)}>{children}</Tag>
   );
 }

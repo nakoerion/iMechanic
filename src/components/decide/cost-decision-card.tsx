@@ -1,3 +1,4 @@
+import { Card } from "../app-shell";
 import { AlertIcon } from "../icons";
 import { APP_COPY } from "../../lib/copy";
 import { COST_ESTIMATE_NOTE, type RepairFamily } from "../../lib/cost";
@@ -87,29 +88,43 @@ export function CostDecisionCard({
         {t.decideIntro} {familyLabel}.
       </p>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <div className="rounded-card border border-line bg-surface-sunken p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-fg-subtle">
-            {t.diyLabel}
-          </p>
-          <p className="mt-1 text-xl font-extrabold tracking-tight text-fg">
+      {/* Two PLATES, not two cards (A3): machine data — bands in mono with
+          tabular figures so the two money figures align digit for digit.
+          Colour-neutral on purpose: no amber, no spark, no elevation lift, so
+          neither path ever reads as the promoted one. */}
+      <div className="mt-4 grid items-stretch gap-2 sm:grid-cols-[1fr_auto_1fr] sm:gap-0">
+        <Card variant="plate" as="div">
+          <p className="label-micro text-fg-subtle">{t.diyLabel}</p>
+          <p className="mt-1 font-mono num text-xl font-extrabold tracking-tight text-fg">
             {formatMoneyRange(diyLowCents, diyHighCents, market)}
           </p>
           <p className="mt-1 text-xs leading-relaxed text-fg-subtle">
             {t.diyHint}
           </p>
+        </Card>
+
+        {/* The divider is a hairline, not a coloured rule: this is a fork in
+            the road, not a recommendation. */}
+        <div
+          aria-hidden
+          className="flex items-center gap-3 sm:flex-col sm:px-3"
+        >
+          <span className="h-px flex-1 bg-hairline sm:h-auto sm:w-px" />
+          <span className="label-micro shrink-0 font-mono text-fg-subtle">
+            vs
+          </span>
+          <span className="h-px flex-1 bg-hairline sm:h-auto sm:w-px" />
         </div>
-        <div className="rounded-card border border-line bg-surface-sunken p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-fg-subtle">
-            {t.workshopLabel}
-          </p>
-          <p className="mt-1 text-xl font-extrabold tracking-tight text-fg">
+
+        <Card variant="plate" as="div">
+          <p className="label-micro text-fg-subtle">{t.workshopLabel}</p>
+          <p className="mt-1 font-mono num text-xl font-extrabold tracking-tight text-fg">
             {formatMoneyRange(shopLowCents, shopHighCents, market)}
           </p>
           <p className="mt-1 text-xs leading-relaxed text-fg-subtle">
             {t.workshopHint}
           </p>
-        </div>
+        </Card>
       </div>
 
       {/* Safety routing — plain warning styling, never upsell styling. */}

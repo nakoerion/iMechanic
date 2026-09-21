@@ -1031,3 +1031,71 @@ the managed dev server answered 502: gallery `/app/_gallery` and `/app` with a
 throwaway `zz-a2-verify@imechanic.test` session, at 390×844 and 1280×800, light
 and dark, scrolling to the stop-driving panel in each. Throwaway user + session
 deleted.
+
+## A3 — Card / Plate materials (branch `a3-card-plate-materials`)
+
+**Two materials instead of one** (proposal §2). `Card`
+(`src/components/app-shell.tsx`) gains `variant?: "card" | "plate"`; the default
+is byte-for-byte the old look apart from `shadow-sm` → `shadow-card` (the A1
+token; equal in light, `none` in dark, where `shadow-sm` was already a no-op), so
+no existing call site changes appearance — every call site passes only spacing
+classes today.
+
+| Material | Classes | Job |
+|---|---|---|
+| `card` (default) | `rounded-card border-line bg-surface p-5 shadow-card` | human guidance: advice, verdicts, explanations, forms |
+| `plate` | `rounded-plate border-line bg-surface-sunken p-3` | machine data: vehicle details, code metadata, money bands, tool lists |
+
+**Flagged deviation — the plate's *outer* edge is `--color-line`, not
+`--color-hairline`.** `--color-hairline` is 8% ink/light and measures ~1.2:1
+against the surface it sits on; as an outer edge it composites to ~#eceef1 on a
+white card and simply disappears — the plate would not have been a *visible*
+material in the light theme, which is the whole point of the slice. The A1 token
+comment already reserves hairline for dividers *inside* a plate, and that is
+exactly how it is used here: the cost-card "vs" rule, the vehicle row dividers
+(`divide-y divide-hairline`) and any in-plate rule. Browser-measured:
+`rgb(226,232,240)` outer edge / `rgba(15,23,42,0.08)` divider in light;
+`rgb(36,51,79)` / `rgba(255,255,255,0.08)` in dark.
+
+Applied:
+- `severity/fault-code-card.tsx` — DTC code gains `tracking-[0.06em]` (1.2px at
+  20px, computed); `system` becomes a plate chip: `<dl>` with an uppercase
+  `.label-micro` legend over the mono value. Free note untouched, no lock/dim.
+- `decide/cost-decision-card.tsx` — DIY and workshop are two plates via
+  `<Card variant="plate">`, money in `font-mono num`, with a centred hairline
+  **"vs"** divider between them (horizontal when stacked at 390px, vertical from
+  `sm`). Still colour-neutral: no amber, no spark, no lift; the safety note keeps
+  `border-danger-border`.
+- `repair/guided-repair-panel.tsx` — tool chips are now plate chips
+  (`.label-micro` legend, `font-mono` value, `rounded-plate`, sunken, hairline).
+  Step rail / numbered discs / checkbox sizing deliberately left to A7.
+  **Also fixed here:** this file's safety note still used the non-existent
+  `border-danger` (the same live bug A1 fixed in `cost-decision-card.tsx`), so
+  its 2px border drew `currentColor` instead of red — now `border-danger-border`.
+  One class, no styling change beyond the intended red safety rule.
+- `routes/app/vehicles.tsx` — the vehicle list is one data plate with hairline
+  row dividers; each row carries `.label-micro` field legends over mono values
+  (`font-mono num` on the year). **No VIN or mileage is rendered: `vehicles`
+  holds only make/model/year (`VehicleOption`), so inventing those fields would
+  fabricate data.** Add-vehicle pickers and the free-garage Pro prompt are
+  unchanged.
+- `lib/copy.ts` — one new label, `faultCode.systemLabel: "System"`, the legend
+  the plate chip needs. A field name, not a claim.
+- `routes/app/[_gallery].tsx` — new **Materials** review section (card vs plate
+  side by side, the cost card in both routes — plain and safety-routed — and the
+  guided-repair panel), plus a **Dark preview — materials** section. Bands come
+  from `estimateCosts()`, never hardcoded.
+
+**Verification.** `bunx tsc --noEmit` → 0 errors. `bun run build` → `BUILD_EXIT=0`.
+`bun run test` → **185 passed | 16 skipped (201)**, unchanged baseline (the 3 DB
+suites abort on the missing `TEST_DATABASE_URL`; the script exits 1 by design).
+Browser pass on the built output on a spare port (`dist` + a throwaway
+`serve-verify.ts`, deleted afterwards) with a throwaway `zz-a3-verify@imechanic.test`
+session at 390×844 and 1280×800, light **and** dark: `/app/_gallery` (Materials
++ Dark-preview-materials) and `/app/vehicles` (one free vehicle, then two with a
+throwaway Pro subscription to exercise the row divider). Measured in the browser:
+card `#fff`/16px/`shadow-card` vs plate `#f8fafc`/8px/no shadow in light;
+`#101a2e`/16px vs `#0b1220`/8px in dark; DTC, money, VIN-position values and tool
+chips all compute `"IBM Plex Mono"` with `tabular-nums`; the "vs" hairline
+computes 1px `rgba(15,23,42,0.08)` / `rgba(255,255,255,0.08)`. Throwaway user,
+session, vehicles and subscription deleted afterwards.

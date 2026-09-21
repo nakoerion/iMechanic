@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Card, ScreenHeader, StickyActionBar } from "../../components/app-shell";
 import { ArrowRightIcon, ScanIcon } from "../../components/icons";
+import { CostDecisionCard } from "../../components/decide/cost-decision-card";
+import { GuidedRepairPanel } from "../../components/repair/guided-repair-panel";
 import { FaultCodeCard } from "../../components/severity/fault-code-card";
 import { VerdictPanel } from "../../components/severity/verdict-panel";
 import { Button } from "../../components/ui/button";
@@ -14,8 +16,10 @@ import {
   ProUpgradePanel,
 } from "../../components/pro/pro-plan";
 import { APP_COPY } from "../../lib/copy";
+import { estimateCosts } from "../../lib/cost";
 import type { Entitlement, EntitlementHandle } from "../../lib/entitlement";
 import {
+  MARKETS,
   MARKET_LIST,
   PRICE_BANDS,
   PRICING_PREVIEW_NOTE,
@@ -166,6 +170,68 @@ function SeverityShowcase() {
   );
 }
 
+/** Card vs plate, and every A3 restyle, in one place. Reused in the dark pane. */
+function MaterialsShowcase() {
+  /* Sample bands, from the real catalog — nothing is hardcoded. The second
+     card carries the safety routing so its note can be reviewed without
+     hunting for a live scan that produces one. */
+  const plain = estimateCosts("ignition", MARKETS.DE);
+  const safetyFirst = estimateCosts("ignition", MARKETS.DE, {
+    verdict: "stop_driving",
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Card>
+          <p className="label-micro text-fg-subtle">Card — human guidance</p>
+          <p className="mt-1 text-sm leading-relaxed text-fg-muted">
+            rounded-card · bg-surface · 20px inside. Advice, verdicts and
+            explanations live here.
+          </p>
+        </Card>
+        <Card variant="plate">
+          <p className="label-micro text-fg-subtle">Plate — machine data</p>
+          <dl className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+            <div>
+              <dt className="label-micro text-fg-subtle">Radius</dt>
+              <dd className="font-mono text-sm font-semibold text-fg">
+                --radius-plate
+              </dd>
+            </div>
+            <div>
+              <dt className="label-micro text-fg-subtle">Dividers</dt>
+              <dd className="font-mono text-sm font-semibold text-fg">
+                --color-hairline
+              </dd>
+            </div>
+          </dl>
+        </Card>
+      </div>
+
+      <CostDecisionCard
+        family={plain.family}
+        currency={plain.currency}
+        diyLowCents={plain.diyLowCents}
+        diyHighCents={plain.diyHighCents}
+        shopLowCents={plain.shopLowCents}
+        shopHighCents={plain.shopHighCents}
+        workshopRecommended={plain.workshopRecommended}
+      />
+      <CostDecisionCard
+        family={safetyFirst.family}
+        currency={safetyFirst.currency}
+        diyLowCents={safetyFirst.diyLowCents}
+        diyHighCents={safetyFirst.diyHighCents}
+        shopLowCents={safetyFirst.shopLowCents}
+        shopHighCents={safetyFirst.shopHighCents}
+        workshopRecommended={safetyFirst.workshopRecommended}
+      />
+      <GuidedRepairPanel family="ignition" />
+    </div>
+  );
+}
+
 function Gallery() {
   return (
     <div className="space-y-8 pb-4">
@@ -194,6 +260,13 @@ function Gallery() {
 
       <Section title="Severity" note="fill + silhouette + words + 2px anchor border">
         <SeverityShowcase />
+      </Section>
+
+      <Section
+        title="Materials"
+        note="A3 — card (guidance) vs plate (machine data), and every restyle that uses a plate"
+      >
+        <MaterialsShowcase />
       </Section>
 
       <Section title="Verdict — AI unavailable" note="honest fallback, never fabricated">
@@ -295,6 +368,15 @@ function Gallery() {
       <Section title="Dark preview" note="the same components inside a nested dark subtree">
         <div className="dark rounded-card bg-app-bg p-4 text-fg">
           <SeverityShowcase />
+        </div>
+      </Section>
+
+      <Section
+        title="Dark preview — materials"
+        note="A3 card/plate restyles with the dark tokens applied"
+      >
+        <div className="dark rounded-card bg-app-bg p-4 text-fg">
+          <MaterialsShowcase />
         </div>
       </Section>
 
