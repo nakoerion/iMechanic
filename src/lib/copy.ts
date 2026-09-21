@@ -27,6 +27,9 @@ export const APP_COPY = {
   faultCode: {
     meaningLabel: "What this means",
     likelyCauseLabel: "Common cause",
+    /* Field legend on the code's system plate (e.g. "SYSTEM · Ignition").
+       A label, not a claim: it names the catalog column it renders. */
+    systemLabel: "System",
     statusLabel: {
       stored: "Stored",
       pending: "Pending",

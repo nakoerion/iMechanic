@@ -63,7 +63,7 @@ export function FaultCodeCard({
           c.text,
         )}
       >
-        <span className="font-mono text-xl font-extrabold tracking-tight">
+        <span className="font-mono text-xl font-extrabold tracking-[0.06em]">
           {code}
         </span>
         <span className="inline-flex items-center gap-1.5 text-sm font-bold">
@@ -76,10 +76,18 @@ export function FaultCodeCard({
       <div className="space-y-3 p-4">
         <div>
           <h3 className="text-base font-bold leading-snug text-fg">{title}</h3>
+          {/* Machine metadata sits on a plate (A3): an uppercase legend in
+              Inter, the value in mono. Not a chip of colour — no severity
+              tint, so the card's only colour stays the verdict. */}
           {system && (
-            <p className="mt-0.5 text-xs font-semibold uppercase tracking-wider text-fg-subtle">
-              {system}
-            </p>
+            <dl className="mt-1.5 inline-flex flex-wrap items-baseline gap-x-2 rounded-plate border border-line bg-surface-sunken px-2 py-1">
+              <dt className="label-micro text-fg-subtle">
+                {APP_COPY.faultCode.systemLabel}
+              </dt>
+              <dd className="font-mono text-xs font-semibold text-fg">
+                {system}
+              </dd>
+            </dl>
           )}
         </div>
 

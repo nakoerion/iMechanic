@@ -289,12 +289,15 @@ function AppVehicles() {
 
       {state.kind === "ready" && vehicles.length > 0 && (
         <>
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-fg-subtle">
+          <h2 className="label-micro text-fg-subtle">
             {/* The count is what the user HOLDS, not what fits on screen — the
                 note below says how many of them are not shown here. */}
             {v.countLabel(total)}
           </h2>
-          <ul className="space-y-3">
+          {/* One data plate (A3): each vehicle is a row inside it, divided by
+              hairlines — the divider is decorative, so it is a hairline and
+              not a `border-line` edge. */}
+          <ul className="divide-y divide-hairline overflow-hidden rounded-plate border border-line bg-surface-sunken">
             {vehicles.map((vehicle) => (
               <VehicleRow key={vehicle.id} vehicle={vehicle} />
             ))}
@@ -429,23 +432,41 @@ function AppVehicles() {
 
 function VehicleRow({ vehicle }: { vehicle: VehicleOption }) {
   return (
-    <li className="rounded-card border border-line bg-surface p-4 shadow-sm">
-      <div className="flex items-center gap-3">
+    <li className="p-3">
+      <div className="flex items-start gap-3">
         <span
           aria-hidden
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-neutral-fill text-fg-muted"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-neutral-fill text-fg-muted"
         >
           <VehiclesIcon className="h-5 w-5" />
         </span>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="text-sm font-bold text-fg">{vehicleName(vehicle)}</p>
-          {/* A stored year is shown plainly; a missing one is left out rather
-              than guessed at. */}
-          {vehicle.year !== null && (
-            <p className="mt-0.5 text-xs font-medium text-fg-subtle">
-              {v.yearPrefix} {vehicle.year}
-            </p>
-          )}
+          {/* Field legends over machine values: the legends are Inter and
+              uppercase, the values are mono. A stored year is shown plainly;
+              a missing one is left out rather than guessed at. */}
+          <dl className="mt-2 flex flex-wrap gap-x-5 gap-y-2">
+            <div>
+              <dt className="label-micro text-fg-subtle">{v.makeLabel}</dt>
+              <dd className="font-mono text-sm font-semibold text-fg">
+                {vehicle.make}
+              </dd>
+            </div>
+            <div>
+              <dt className="label-micro text-fg-subtle">{v.modelLabel}</dt>
+              <dd className="font-mono text-sm font-semibold text-fg">
+                {vehicle.model}
+              </dd>
+            </div>
+            {vehicle.year !== null && (
+              <div>
+                <dt className="label-micro text-fg-subtle">{v.yearLabel}</dt>
+                <dd className="num font-mono text-sm font-semibold text-fg">
+                  {vehicle.year}
+                </dd>
+              </div>
+            )}
+          </dl>
         </div>
       </div>
     </li>

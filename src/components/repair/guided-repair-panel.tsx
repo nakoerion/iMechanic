@@ -43,7 +43,7 @@ export function GuidedRepairPanel({
       {guide.safetyNote && (
         <div
           role="note"
-          className="mt-3 rounded-card border-2 border-danger bg-danger-fill p-4"
+          className="mt-3 rounded-card border-2 border-danger-border bg-danger-fill p-4"
         >
           <p className="flex items-start gap-2 text-sm font-bold text-danger-fg">
             <AlertIcon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
@@ -80,14 +80,18 @@ export function GuidedRepairPanel({
                   </span>
                   {step.tools.length > 0 && (
                     <span className="mt-2 block">
-                      <span className="text-xs font-semibold uppercase tracking-wider text-fg-subtle">
+                      <span className="label-micro block text-fg-subtle">
                         {t.toolsLabel}
                       </span>
-                      <span className="mt-1 flex flex-wrap gap-1.5">
+                      {/* Tools are machine-adjacent data (A3): each one sits on
+                          a small plate — mono value against a hairline edge —
+                          instead of a rounded pill. The step rail and the
+                          checkbox hit areas are A7 and are untouched here. */}
+                      <span className="mt-1.5 flex flex-wrap gap-1.5">
                         {step.tools.map((tool, j) => (
                           <span
                             key={j}
-                            className="rounded-full bg-neutral-fill px-2.5 py-0.5 text-xs font-semibold text-neutral-fg"
+                            className="rounded-plate border border-line bg-surface-sunken px-2 py-0.5 font-mono text-xs font-semibold text-fg"
                           >
                             {tool}
                           </span>
