@@ -29,6 +29,57 @@
 }
 
 /* ------------------------------------------------------------------ */
+/* IBM Plex Mono — self-hosted (A1).                                   */
+/* The technical face: DTC codes, VINs, money bands, timings, adapter  */
+/* transcript. Same GDPR reason as Inter (D15) — never a CDN.          */
+/* Two static weights (400, 600), latin + latin-ext, so Albanian's     */
+/* ë / ç are covered. ~58 KB for all four files.                       */
+/* IBM Plex is licensed under the SIL Open Font License 1.1.           */
+/* ------------------------------------------------------------------ */
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-mono-latin-ext-400.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7,
+    U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F,
+    U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-mono-latin-400.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6,
+    U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122,
+    U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-mono-latin-ext-600.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7,
+    U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F,
+    U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-mono-latin-600.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6,
+    U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122,
+    U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* ------------------------------------------------------------------ */
 /* iMechanic design system — tokens                                    */
 /*                                                                     */
 /* Two-level tokens:                                                   */
@@ -46,6 +97,9 @@
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
     Roboto, Helvetica, Arial, sans-serif;
+  /* Machine-produced values only (DTC codes, VIN, money, transcript).
+     Never for prose — Inter stays the reading face. */
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* Brand — fixed in both themes */
   --color-navy-950: #0b1220;
@@ -64,6 +118,12 @@
   --color-fg-muted: var(--ui-fg-muted);
   --color-fg-subtle: var(--ui-fg-subtle);
   --color-fg-invert: var(--ui-fg-invert);
+  /* Instrument material — dividers *inside* a plate, and the 1px
+     "backlit rim" on the top edge of a panel. Both non-text/decorative:
+     see the measured ratios in the role block below before using either
+     to separate anything interactive. */
+  --color-hairline: var(--ui-hairline);
+  --color-bezel: var(--ui-bezel);
 
   /* Brand accent (amber). Standardised on amber-400 for marks. */
   --color-brand: var(--ui-brand);
@@ -102,6 +162,15 @@
   /* Shape */
   --radius-card: 1rem;
   --radius-control: 0.75rem;
+  /* Technical/data blocks sit at the tighter plate radius (A1). */
+  --radius-plate: 0.5rem;
+
+  /* Elevation — one model for app and marketing (A1).
+     Card: a real shadow in light, `none` in dark (there the bezel
+     hairline does the separating — `shadow-sm` was invisible on navy).
+     Key: the primary CTA lift, amber-tinted, identical in both themes. */
+  --shadow-card: var(--ui-shadow-card);
+  --shadow-key: 0 8px 24px rgb(245 158 11 / 0.2);
 
   /* Minimum comfortable tap target — 48px, glove-and-daylight sized */
   --spacing-tap: 3rem;
@@ -143,6 +212,21 @@
   --ui-fg-muted: #475569;   /* 6.9:1 on app-bg, 7.6:1 on surface */
   --ui-fg-subtle: #64748b;  /* 4.8:1 on surface; 4.3:1 on app-bg — under AA */
   --ui-fg-invert: #ffffff;  /* 2.6:1 on neutral-border — under 3:1, see above */
+
+  /* Instrument material (A1). Both are DECORATIVE, non-text: measured
+     against the surface they are painted on.
+       --ui-hairline #0f172a14 (8% ink) on surface = 1.2:1  — below 3:1
+       --ui-bezel    #ffffff on surface            = 1.0:1  — below 3:1
+     Neither may be the ONLY thing separating two interactive rows or two
+     tap targets; hairline is for dividers inside a data plate, bezel is
+     a top rim that only reads on a dark ground (in light it is the white
+     edge of a raised panel). Row/border separation uses --ui-line /
+     --ui-line-strong, exactly as the app already does. */
+  --ui-hairline: #0f172a14;
+  --ui-bezel: #ffffff;
+  /* Elevation model (A1): the light theme gets a real, soft card shadow. */
+  --ui-shadow-card: 0 1px 2px rgb(15 23 42 / 0.06),
+    0 1px 3px rgb(15 23 42 / 0.05);
 
   --ui-brand: #fbbf24;
   --ui-brand-strong: #f59e0b;
@@ -188,6 +272,18 @@
   --ui-fg-subtle: #94a3b8;  /* 7.6:1 on app-bg, 6.8:1 on surface */
   --ui-fg-invert: #0b1220;  /* 3.9:1 on neutral-border — icon/chip only */
 
+  /* Instrument material (A1). Decorative, non-text, measured:
+       --ui-hairline #ffffff14 (8% light) on surface = 1.2:1 — below 3:1
+       --ui-bezel    #ffffff1f            on surface = 1.4:1 — below 3:1
+     Same rule as the light theme: neither replaces --ui-line / 
+     --ui-line-strong for separating interactive rows. */
+  --ui-hairline: #ffffff14;
+  --ui-bezel: #ffffff1f;
+  /* No card shadow on navy: it renders as an invisible smudge and made the
+     dark app flat (that was the bug). Here the bezel rim does the work, so
+     --shadow-card resolves to `none` and any `shadow-sm` usage is a no-op. */
+  --ui-shadow-card: none;
+
   --ui-brand: #fbbf24;
   --ui-brand-strong: #fcd34d;
   --ui-brand-fg: #fcd34d;   /* 12.0:1 on surface, 13.5:1 on app-bg */
@@ -230,6 +326,9 @@
   --color-fg-muted: var(--ui-fg-muted);
   --color-fg-subtle: var(--ui-fg-subtle);
   --color-fg-invert: var(--ui-fg-invert);
+  --color-hairline: var(--ui-hairline);
+  --color-bezel: var(--ui-bezel);
+  --shadow-card: var(--ui-shadow-card);
   --color-brand: var(--ui-brand);
   --color-brand-strong: var(--ui-brand-strong);
   --color-brand-fg: var(--ui-brand-fg);
@@ -264,14 +363,14 @@
     scroll-padding-top: 4.5rem;
   }
   body {
-    @apply bg-white font-sans text-slate-900 antialiased;
+    /* One rule for both themes (A1): the light theme used to hard-code
+       `bg-white text-slate-900` and dark then overrode it. Role tokens do
+       the same job in one place, and a nested `.dark` subtree (the gallery
+       preview panes) now inherits correctly too. The marketing page still
+       paints white: `routes/index.tsx` sets `bg-white text-slate-900` on
+       its own root. */
+    @apply bg-app-bg font-sans text-fg antialiased;
     text-rendering: optimizeLegibility;
-  }
-  /* Only the dark theme changes the document background; the light theme is
-     byte-for-byte what the marketing page already shipped with. */
-  .dark body {
-    background-color: var(--color-app-bg);
-    color: var(--color-fg);
   }
   section {
     /* QA: "Run demo scan" was auto-scrolled into view but rested UNDER the
@@ -351,6 +450,17 @@
 }
 
 @layer utilities {
+  /* Machine numbers line up (A1): money bands, `Codes read: N`, mileage and
+     timings stack in columns, so their digits must not wobble. Applied by
+     class, never globally — tabular figures are wrong for prose. */
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+  /* The panel legend (A1): the uppercase micro-label that was repeated as an
+     inline string in ~20 components. Same four classes, one name. */
+  .label-micro {
+    @apply text-xs font-semibold uppercase tracking-wider;
+  }
   .pt-safe {
     padding-top: env(safe-area-inset-top);
   }

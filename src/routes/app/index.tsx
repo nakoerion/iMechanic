@@ -34,27 +34,29 @@ function AppHome() {
         </p>
       </header>
 
-      {/* Primary scan entry */}
-      <section className="overflow-hidden rounded-2xl bg-navy-950 p-6 text-white shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-wider text-amber-300">
-          New diagnosis
-        </p>
+      {/* Primary scan entry. Panel + text are role tokens (A1): the old
+          raw-navy panel with white/amber/grey utility colours only ever
+          worked in the dark theme, and its CTA set `text-fg` on amber — which
+          in dark is near-white text on amber, 1.6:1. Role tokens adapt in
+          both themes: --color-surface-sunken is exactly the old navy in dark. */}
+      <section className="overflow-hidden rounded-2xl border border-line bg-surface-sunken p-6 text-fg shadow-sm">
+        <p className="label-micro text-brand-fg">New diagnosis</p>
         <h2 className="mt-2 text-2xl font-extrabold tracking-tight">
           Start a scan
         </h2>
-        <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-300">
+        <p className="mt-2 max-w-md text-sm leading-relaxed text-fg-muted">
           Connect an OBD2 adapter or try the demo — then read your codes, get an
           honest verdict and decide what to do next.
         </p>
         <Link
           to="/app/scan"
-          className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-lg bg-amber-400 px-5 py-3 text-base font-semibold text-fg transition-colors hover:bg-amber-300"
+          className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-lg bg-brand px-5 py-3 text-base font-semibold text-on-brand transition-colors hover:bg-brand-strong"
         >
           <ScanIcon className="h-5 w-5" />
           Go to scan
           <ArrowRightIcon className="h-4 w-4" />
         </Link>
-        <p className="mt-4 text-xs font-medium text-slate-400">
+        <p className="mt-4 text-xs font-medium text-fg-subtle">
           Scanning is live — connect an adapter, run the demo, or type a code in
           by hand.
         </p>
@@ -72,7 +74,7 @@ function AppHome() {
               key={step}
               className="flex items-center gap-1.5 rounded-full bg-neutral-fill px-3 py-1.5 text-xs font-semibold text-fg-muted"
             >
-              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-amber-400/20 text-[10px] font-bold text-brand-fg">
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-brand/20 text-[10px] font-bold text-brand-fg">
                 {i + 1}
               </span>
               {step}
@@ -84,7 +86,7 @@ function AppHome() {
       {/* Saving is live: every scan is persisted (S3). This card therefore
           says what happens to a scan — it never claims the list is empty. */}
       <section className="flex flex-col items-center rounded-2xl border border-line bg-surface px-6 py-10 text-center shadow-sm">
-        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-navy-950 text-amber-400">
+        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-app-bg text-brand-fg">
           <HistoryIcon className="h-7 w-7" />
         </span>
         <h2 className="mt-4 text-lg font-bold text-fg">

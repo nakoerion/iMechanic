@@ -116,7 +116,7 @@ export function CostDecisionCard({
       {workshopRecommended && (
         <div
           role="note"
-          className="mt-4 rounded-card border-2 border-danger bg-danger-fill p-4"
+          className="mt-4 rounded-card border-2 border-danger-border bg-danger-fill p-4"
         >
           <p className="flex items-start gap-2 text-sm font-bold text-danger-fg">
             <AlertIcon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />

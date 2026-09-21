@@ -25,11 +25,16 @@ export function EmptyState({
 }) {
   return (
     <section className="flex flex-col items-center rounded-2xl border border-line bg-surface px-6 py-12 text-center shadow-sm">
-      <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-navy-950 text-amber-400">
+      {/* Plate + mark are role tokens (A1): the old raw navy plate with the
+          raw amber mark only ever read correctly in the dark theme.
+          --color-app-bg gives a visible recessed plate in both, and
+          --color-brand-fg is the brand mark that stays legible on it
+          (6.5:1 light, 13.5:1 dark). */}
+      <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-app-bg text-brand-fg">
         <Icon className="h-7 w-7" />
       </span>
       {eyebrow && (
-        <p className="mt-5 text-xs font-semibold uppercase tracking-wider text-brand-fg">
+        <p className="label-micro mt-5 text-brand-fg">
           {eyebrow}
         </p>
       )}

@@ -905,3 +905,62 @@ server change, no new dependency, no network call.
   field opens the popular-makes list, typing "vw" suggests "Volkswagen" alongside
   the "Other — save what I typed" row, ArrowDown + Enter selects it, the model list
   then follows the make (typing "gol" → Golf), and the year list filters on "201".
+
+## A1 — design foundations: mono font + instrument tokens (branch a1-design-foundations)
+Slice A1 of `/home/team/shared/UI_REDESIGN_PROPOSAL.md` §6 ("foundations, no visual
+risk"). Tokens, typography and two token-drift cleanups — no component restyle, no
+severity hex touched, no new text-carrying colour.
+
+- **IBM Plex Mono, self-hosted (SIL OFL).** Four woff2 files in `public/fonts/`
+  (`ibm-plex-mono-{latin,latin-ext}-{400,600}.woff2`, ~58 KB total), four
+  `@font-face` blocks at the top of `app.css`, `--font-mono: "IBM Plex Mono",
+  ui-monospace, SFMono-Regular, Menlo, monospace`. latin-ext kept for Albanian.
+  **Never a CDN** — same GDPR rule as Inter (D15). Verified live: the DTC code in
+  `fault-code-card` computes to the IBM Plex stack.
+- **New tokens.** `--radius-plate` (0.5rem), `--ui-/--color-hairline`
+  (#0f172a14 / #ffffff14), `--ui-/--color-bezel` (#ffffff / #ffffff1f),
+  `--shadow-card` (`var(--ui-shadow-card)`: a real soft shadow in light, **none** in
+  dark where the bezel rim does the separating — `shadow-sm` was invisible on navy),
+  `--shadow-key: 0 8px 24px rgb(245 158 11 / 0.2)` (same in both themes). Both new
+  colour roles are re-declared in `.dark` like every other role, so a NESTED dark
+  subtree (the gallery preview panes) resolves them — verified in the browser.
+- **Measured contrast (audit-token-contrast, both themes).** hairline 1.2:1 on
+  surface/sunken/app-bg (light and dark); bezel 1.0:1 light (white on white) / 1.4:1
+  dark. Both are DECORATIVE and below the 3:1 non-text threshold by construction —
+  recorded in `app.css` with the rule that neither may be the only separator of two
+  interactive rows/tap targets (`--ui-line` / `--ui-line-strong` keep that job,
+  exactly as before). Pairs introduced by the drift cleanup, all passing: fg on
+  sunken 17.1:1, fg-muted 7.2/10.2:1, fg-subtle 4.5/7.3:1, brand-fg on app-bg
+  6.5/13.5:1, brand-fg on brand/20 6.1/8.5:1, on-brand on brand 11.2:1 (both themes).
+- **Utilities.** `.num` (`font-variant-numeric: tabular-nums`, applied by class —
+  never globally) and `.label-micro` (`text-xs font-semibold uppercase
+  tracking-wider`), both in `@layer utilities`; `.label-micro` is already used by the
+  two cleaned files so it is exercised in the build.
+- **Body base rule, one rule for both themes.** `@layer base body` moved from the
+  hard-coded `bg-white text-slate-900` + a `.dark body` override to
+  `bg-app-bg text-fg`. Verified in a real browser: body computes #f1f5f9/#0f172a and
+  the **marketing page still paints white** — `routes/index.tsx` sets
+  `bg-white text-slate-900` on its own root (root bg rgb(255,255,255), hero section
+  still navy-950).
+- **Token-drift cleanup** in `routes/app/index.tsx` and `components/empty-state.tsx`:
+  the app-home hero panel and both icon plates now use role tokens
+  (`bg-surface-sunken` / `bg-app-bg`, `text-fg` / `text-fg-muted` / `text-fg-subtle`,
+  `text-brand-fg`, `bg-brand text-on-brand`). This also fixed a real dark-theme bug:
+  the hero CTA set `text-fg` on amber = near-white on amber (1.6:1) in dark; it is now
+  `text-on-brand` (11.2:1 both themes). In dark the hero panel's background is
+  unchanged (`bg-surface-sunken` = the old navy-950 there — confirmed in the browser;
+  the only dark-theme pixel difference is the CTA's now-dark text);
+  light theme turns that panel into a pale plate with a hairline border, dark text and
+  the amber CTA. Both themes screenshotted at 390x844, zero console errors.
+- **Live bug fixed:** `components/decide/cost-decision-card.tsx` line 119
+  `border-2 border-danger` → `border-danger-border`. There is no `--color-danger`
+  token, so the safety-routing note's red border never rendered — it does now.
+- **Untouched, by design:** every `--ui-ok/warn/danger/neutral-*` value, the two
+  recorded sub-threshold pairs and their `n.n:1` comments, `--spacing-tap`, the
+  focus-outline rule and the `prefers-reduced-motion` guards. `--color-tech` is
+  deferred to a later slice, so A1 introduces no new text-carrying colour.
+- **Verification:** `bunx tsc --noEmit` → 0 errors; `bun run build` clean;
+  `bun run test` → **185 passed / 16 skipped**, only the 3 DB suites aborting on the
+  missing `TEST_DATABASE_URL` (unchanged baseline). Browser pass at 390x844 and
+  desktop (light + dark) against the built output on a spare port (the managed dev
+  server on :3000 was down, 502) with a throwaway session; test rows deleted.
