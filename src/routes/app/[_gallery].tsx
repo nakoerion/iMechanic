@@ -318,6 +318,7 @@ const SWATCHES: { label: string; className: string }[] = [
   { label: "surface", className: "bg-surface border-line" },
   { label: "sunken", className: "bg-surface-sunken border-line" },
   { label: "raised", className: "bg-surface-raised border-line" },
+  { label: "chrome", className: "bg-chrome border-navy-800" },
   { label: "app-bg", className: "bg-app-bg border-line" },
   { label: "brand", className: "bg-brand border-brand" },
   { label: "ok", className: "bg-ok-solid border-ok-border" },
