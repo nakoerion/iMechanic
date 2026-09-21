@@ -52,10 +52,13 @@ function formatWhen(iso: string): string {
   if (hours < 24) return h.hoursAgo(hours);
   const days = Math.floor(hours / 24);
   if (days <= 7) return h.daysAgo(days);
-  return new Date(at).toLocaleDateString(undefined, {
+  /* Pinned locale + zone: a runtime-default locale would render a different
+     date on the server and in the browser (hydration mismatch, #418). */
+  return new Date(at).toLocaleDateString("en-US", {
     day: "numeric",
     month: "short",
     year: "numeric",
+    timeZone: "UTC",
   });
 }
 

@@ -259,10 +259,14 @@ export function formatPlanDate(value: string | null): string | null {
   if (!value) return null;
   const at = new Date(value);
   if (Number.isNaN(at.getTime())) return null;
-  return at.toLocaleDateString(undefined, {
+  /* Locale and time zone are pinned, never left to the runtime: the server's
+     default locale/zone and the browser's differ, and a differing date string
+     is a hydration mismatch (React error #418) on the server-rendered page. */
+  return at.toLocaleDateString("en-US", {
     day: "numeric",
     month: "long",
     year: "numeric",
+    timeZone: "UTC",
   });
 }
 

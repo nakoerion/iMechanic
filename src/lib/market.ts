@@ -23,8 +23,22 @@ export type Market = {
   name: string;
   /** ISO 4217 */
   currency: "EUR" | "GBP" | "ALL";
+  /** How the currency is written, e.g. `€` or `Lekë`. */
   symbol: string;
-  locale: string;
+  /** "before" → `€120`; "after" → `120 Lekë` (one space is inserted). */
+  symbolPosition: "before" | "after";
+  /**
+   * Number marks are declared here, never read from the runtime.
+   *
+   * The server and the browser ship different ICU data. For `sq-AL` the server
+   * writes "120 Lekë" / "184 000 km" while a browser without Albanian data
+   * silently falls back to "ALL 120" / "184,000 km". Both render the same
+   * screen, but the server-rendered text is what React expects on first paint —
+   * so a disagreement is a hydration mismatch (React error #418) that throws
+   * the whole SSR tree away. Formatting therefore has to be ours.
+   */
+  groupSeparator: string;
+  decimalSeparator: string;
   distanceUnit: DistanceUnit;
 };
 
@@ -36,7 +50,9 @@ export const MARKETS: Record<CountryCode, Market> = {
     name: "Germany",
     currency: "EUR",
     symbol: "€",
-    locale: "de-DE",
+    symbolPosition: "before",
+    groupSeparator: ".",
+    decimalSeparator: ",",
     distanceUnit: "km",
   },
   GB: {
@@ -44,15 +60,19 @@ export const MARKETS: Record<CountryCode, Market> = {
     name: "United Kingdom",
     currency: "GBP",
     symbol: "£",
-    locale: "en-GB",
+    symbolPosition: "before",
+    groupSeparator: ",",
+    decimalSeparator: ".",
     distanceUnit: "mi",
   },
   AL: {
     country: "AL",
     name: "Albania",
     currency: "ALL",
-    symbol: "L",
-    locale: "sq-AL",
+    symbol: "Lekë",
+    symbolPosition: "after",
+    groupSeparator: " ",
+    decimalSeparator: ",",
     distanceUnit: "km",
   },
 };
@@ -73,21 +93,26 @@ export function resolveMarket(country?: string | null): Market {
 /* Money                                                               */
 /* ------------------------------------------------------------------ */
 
-const moneyFormatters = new Map<string, Intl.NumberFormat>();
+/* ------------------------------------------------------------------ */
+/* Deterministic number/money/distance formatting                      */
+/* ------------------------------------------------------------------ */
 
-function moneyFormatter(market: Market, fractionDigits: number) {
-  const key = `${market.locale}:${market.currency}:${fractionDigits}`;
-  let fmt = moneyFormatters.get(key);
-  if (!fmt) {
-    fmt = new Intl.NumberFormat(market.locale, {
-      style: "currency",
-      currency: market.currency,
-      minimumFractionDigits: fractionDigits,
-      maximumFractionDigits: fractionDigits,
-    });
-    moneyFormatters.set(key, fmt);
-  }
-  return fmt;
+/**
+ * Every number the app shows is formatted here, by hand, from the market's own
+ * marks — never by `Intl`. See the `groupSeparator` note on `Market`: the
+ * server's ICU data and the browser's can disagree, and any disagreement is a
+ * hydration mismatch on first paint. `toFixed` is exact in both runtimes.
+ */
+function groupDigits(digits: string, separator: string): string {
+  if (!separator) return digits;
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, separator);
+}
+
+function formatAmount(value: number, market: Market, decimals: number): string {
+  const [whole, fraction] = Math.abs(value).toFixed(decimals).split(".");
+  const grouped = groupDigits(whole, market.groupSeparator);
+  const sign = value < 0 ? "-" : "";
+  return sign + grouped + (decimals > 0 ? market.decimalSeparator + fraction : "");
 }
 
 /**
@@ -101,7 +126,10 @@ export function formatMoney(
 ): string {
   const whole = Math.round(cents) % 100 === 0;
   const decimals = options.decimals ?? !whole;
-  return moneyFormatter(market, decimals ? 2 : 0).format(Math.round(cents) / 100);
+  const amount = formatAmount(Math.round(cents) / 100, market, decimals ? 2 : 0);
+  return market.symbolPosition === "after"
+    ? `${amount} ${market.symbol}`
+    : `${market.symbol}${amount}`;
 }
 
 /** Cost estimates are always bands, never a single false-precision number. */
@@ -127,7 +155,7 @@ export function kmTo(km: number, unit: DistanceUnit): number {
 /** Odometer values are stored as `vehicles.mileage_km` and converted here. */
 export function formatDistance(km: number, market: Market): string {
   const value = Math.round(kmTo(km, market.distanceUnit));
-  return `${new Intl.NumberFormat(market.locale).format(value)} ${market.distanceUnit}`;
+  return `${formatAmount(value, market, 0)} ${market.distanceUnit}`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -153,8 +181,18 @@ export const PRICE_BANDS: PriceBand[] = [
   { id: "c", annualCents: 4799, monthlyCents: 599, currency: "EUR" },
 ];
 
-/** Bands are quoted in EUR with a "€31.99" shape regardless of user locale. */
-const BAND_MARKET: Market = { ...MARKETS.DE, locale: "en-IE" };
+/**
+ * Bands are quoted in EUR with a "€31.99" shape regardless of user locale —
+ * so they keep the euro symbol but take British marks, not the German ones.
+ * (This used to be an `en-IE` Intl locale; the marks are now explicit so the
+ * string is identical on the server and in the browser.)
+ */
+const BAND_MARKET: Market = {
+  ...MARKETS.DE,
+  symbolPosition: "before",
+  groupSeparator: ",",
+  decimalSeparator: ".",
+};
 
 export function formatBandAnnual(band: PriceBand): string {
   return formatMoney(band.annualCents, BAND_MARKET, { decimals: true });
