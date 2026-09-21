@@ -260,11 +260,47 @@ export const APP_COPY = {
     formTitle: "Add a vehicle",
     formHint: "Stored as make, model and year. You can add more than one.",
     makeLabel: "Make",
-    makeHint: "For example VW",
+    makeHint: "Start typing, or pick a make",
     modelLabel: "Model",
-    modelHint: "For example Golf",
+    modelHint: "Start typing, or pick a model",
     yearLabel: "Year (optional)",
-    yearPlaceholder: "For example 2016",
+    yearPlaceholder: "Start typing, or pick a year",
+    /* The three pickers are a SUGGESTION aid, never a gate: `createVehicle` and
+       the database still accept any non-empty make/model the user types, so
+       every string here is honest that the list is a short, popular, curated
+       one — never "all models" — and that typing your own is fine. */
+    picker: {
+      showSuggestions: "Show suggestions",
+      count: (n: number) =>
+        `${n} suggestion${n === 1 ? "" : "s"} available`,
+      otherOption: (typed: string) =>
+        `Other — save “${typed}” exactly as I typed it`,
+      customNote:
+        "Not in our list of popular cars — that's fine, we'll save it exactly as you type it.",
+      make: {
+        hint: "Popular makes — start typing to filter, or type your car's make if you don't see it.",
+        listLabel: "Popular makes",
+        listNote: "A short list of common makes, not every make.",
+        emptyMessage:
+          "No popular make matches that — type it anyway and press Save, we'll keep it as you typed it.",
+      },
+      model: {
+        hint: "Popular models for the make you picked — or type the model yourself.",
+        listLabel: "Popular models for this make",
+        listNote: "Common models only — type yours if it's missing.",
+        emptyMessage:
+          "No popular model matches that — type it anyway and press Save, we'll keep it as you typed it.",
+        noMakeYet:
+          "Models are suggested once we know the make — you can always type the model instead.",
+      },
+      year: {
+        hint: (oldest: number, newest: number) =>
+          `Any year from ${oldest} to ${newest} — or leave it empty.`,
+        listLabel: "Model year",
+        listNote: "Newest first — type a year to jump to it.",
+        emptyMessage: "Type a four-digit year, or pick one from the list.",
+      },
+    },
     makeRequired: "Enter the make — for example VW.",
     modelRequired: "Enter the model — for example Golf.",
     yearInvalid: "Enter a year from 1980 to next year, or leave it empty.",

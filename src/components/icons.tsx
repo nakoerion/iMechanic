@@ -99,6 +99,15 @@ export function ArrowRightIcon(props: IconProps) {
   );
 }
 
+/** Popup indicator for a combobox/list field (see ui/combobox-field.tsx). */
+export function ChevronDownIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
+
 export function CheckIcon(props: IconProps) {
   return (
     <svg {...base(props)}>
