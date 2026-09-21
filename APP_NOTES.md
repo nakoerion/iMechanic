@@ -1123,3 +1123,22 @@ Fix (correctness only, no visual redesign):
 
 Rule going forward: text rendered during SSR must be formatted by us, never by
 runtime locale data (`Intl`) or the runtime's default locale/time zone.
+
+## Hydration (#418) — SSR must not depend on runtime locale data
+
+The redesign was blocked by `Minified React error #418` on authed screens. The cause was **not** the
+theme system (the inline theme script + `suppressHydrationWarning` on `<html>` do their job; with them
+React reuses the SSR nodes — verified by stamping the SSR `<main>` before hydration and checking the
+stamp survives). It was **`Intl`**: the server (Bun/ICU) writes Albanian amounts as `120 Lekë` / `184 000 km`
+while a browser without Albanian ICU data silently falls back to `ALL 120` / `184,000 km`. Server text ≠
+client text = #418, and React throws the whole SSR tree away and re-renders.
+
+Fix (correctness only, no visual redesign):
+1. `src/lib/market.ts` no longer uses `Intl` at all. Each `Market` declares its own `symbol`,
+   `symbolPosition`, `groupSeparator` and `decimalSeparator`, and `formatMoney`/`formatDistance` build the
+   string by hand (exact `toFixed`). `BAND_MARKET` keeps the `€31.99` shape with explicit marks.
+2. Dates are pinned: `formatPlanDate` (pro-plan) and `formatWhen` (history) use
+   `toLocaleDateString("en-US", { …, timeZone: "UTC" })`. An `undefined` locale/zone is server-vs-browser
+   dependent, so a German user's browser would have mismatched every date on the account screen.
+3. `APP_NOTES` note (this one).
+Rule going forward: anything rendered during SSR must be formatted by us, never by runtime locale data.
