@@ -34,17 +34,23 @@ function AppHome() {
         </p>
       </header>
 
-      {/* Primary scan entry. Panel + text are role tokens (A1): the old
-          raw-navy panel with white/amber/grey utility colours only ever
-          worked in the dark theme, and its CTA set `text-fg` on amber — which
-          in dark is near-white text on amber, 1.6:1. Role tokens adapt in
-          both themes: --color-surface-sunken is exactly the old navy in dark. */}
-      <section className="overflow-hidden rounded-2xl border border-line bg-surface-sunken p-6 text-fg shadow-sm">
-        <p className="label-micro text-brand-fg">New diagnosis</p>
+      {/* Primary scan entry. Panel + text are role tokens: the old raw-navy
+          panel with white/amber/grey utility colours only ever worked in the
+          dark theme, and its CTA set `text-fg` on amber — which in dark is
+          near-white text on amber, 1.6:1.
+
+          A2: the plate is `--color-chrome`, the same fixed navy the header and
+          tab bar use, so it stays navy in BOTH themes instead of turning into
+          a pale plate in light. Because chrome does not flip, its text must
+          come from the `on-chrome` roles — `text-fg` here would be dark ink on
+          navy at ~1.1:1 in the light theme. The CTA keeps `bg-brand` +
+          `text-on-brand`, which is already fixed in both themes. */}
+      <section className="overflow-hidden rounded-2xl border border-navy-800 bg-chrome p-6 text-on-chrome shadow-sm">
+        <p className="label-micro text-brand">New diagnosis</p>
         <h2 className="mt-2 text-2xl font-extrabold tracking-tight">
           Start a scan
         </h2>
-        <p className="mt-2 max-w-md text-sm leading-relaxed text-fg-muted">
+        <p className="mt-2 max-w-md text-sm leading-relaxed text-on-chrome-muted">
           Connect an OBD2 adapter or try the demo — then read your codes, get an
           honest verdict and decide what to do next.
         </p>
@@ -56,7 +62,7 @@ function AppHome() {
           Go to scan
           <ArrowRightIcon className="h-4 w-4" />
         </Link>
-        <p className="mt-4 text-xs font-medium text-fg-subtle">
+        <p className="mt-4 text-xs font-medium text-on-chrome-muted">
           Scanning is live — connect an adapter, run the demo, or type a code in
           by hand.
         </p>

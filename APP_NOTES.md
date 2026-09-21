@@ -964,3 +964,70 @@ severity hex touched, no new text-carrying colour.
   missing `TEST_DATABASE_URL` (unchanged baseline). Browser pass at 390x844 and
   desktop (light + dark) against the built output on a spare port (the managed dev
   server on :3000 was down, 502) with a throwaway session; test rows deleted.
+
+### A2 — VerdictPanel as a telltale lamp + `--color-chrome` (hero plate) — branch `a2-verdict-telltale`
+
+**Part 1 — the A1 follow-up (flagged judgement call, resolved).** `--ui-chrome`
+(`#0b1220`), `--ui-on-chrome` (`#ffffff`) and `--ui-on-chrome-muted` (`#cbd5e1`)
+are new role tokens declared **byte-identically in `:root` and `.dark`** — that
+is the point of the role: chrome is the brand anchor the header and tab bar
+already paint, not a themed surface. Each is re-declared in the `.dark` block
+like every other role so a nested `.dark` subtree still resolves.
+
+The app-home hero plate now uses `bg-chrome` + `text-on-chrome` /
+`text-on-chrome-muted` (+ `border-navy-800`, matching the tab bar) instead of
+`bg-surface-sunken` + `text-fg*`, so it stays navy in **both** themes. **This
+needed the on-chrome text roles, not just the ground:** the panel's copy used
+`text-fg`/`text-fg-muted`/`text-fg-subtle`, which are dark ink in the light
+theme — navy ground + `text-fg` would have measured ~1.1:1. The amber
+micro-label moved `text-brand-fg` → `text-brand` (`#fbbf24` is already fixed in
+both themes, 11.2:1 on chrome) and the CTA keeps `bg-brand text-on-brand`.
+Measured on `#0b1220` (audit-token-contrast method): on-chrome 18.7:1,
+on-chrome-muted 12.6:1, brand 11.2:1, on-brand 11.2:1 — all AAA. Verified in the
+browser: light **and** dark both compute `rgb(11, 18, 32)` for the hero plate
+(mobile 390×844 and desktop 1280×800), where light used to be `#f8fafc`.
+Header/tab-bar styling untouched. Gallery gained a `chrome` colour swatch.
+
+**Part 2 — `VerdictPanel` (motifs 1 telltale lamp, 2 backlit bezel, 7 hazard
+rule).** Untouched by contract: the three redundant signals, every severity
+hex, the 2px anchor border, the four glyphs, and the free/never-gated behaviour
+(no lock, blur, dim, opacity or motion added — nothing animated).
+- (a) The 56px chip is a round lamp: `rounded-full ring-2 ring-inset` with the
+  rim class from the new `ring` field in `SEVERITY_CLASSES`.
+  **Deliberate deviation, flagged for review:** the brief's example was the
+  severity `*-border` token, but in this palette `border` and `solid` are the
+  **same hex** for all four severities (`--ui-ok-border` #047857 =
+  `--ui-ok-solid`, etc.), so a border-coloured inset ring on a solid lamp is
+  tonally invisible — it would have shipped as a no-op. The rim therefore uses
+  the `on-*` role (`ring-on-ok` / `ring-on-warn` / `ring-on-danger`,
+  `ring-fg-invert` for unknown) — the role already proven to read on that solid
+  (5.2–6.5:1; unknown's 2.6:1 is the pre-existing recorded weak pair). No new
+  hex, no new colour role, severities still distinguishable with colour
+  stripped. Computing in light: `rgb(255,255,255) 0 0 0 2px inset` for every
+  severity; in dark the matching near-black `on-*` values.
+- (b) 1px `bg-bezel` hairline as the card's first child (a real element, not an
+  inset shadow, so it cannot fight `shadow-sm`). `overflow-hidden` added to the
+  card so a flush top rule follows the card radius.
+- (c) Verdict word `text-2xl` → `text-[28px]`; the `Codes read: N` counter is now
+  `font-mono num` (IBM Plex Mono + tabular-nums, computed in-browser).
+- (d) Hazard rule: a 4px `bg-danger-solid` div on `stop_driving` **only**,
+  `aria-hidden` (the words already carry the verdict). Browser count: exactly one
+  hazard rule per rendered theme (`div.h-1` = 2 across the light showcase + the
+  dark preview pane), `null` on drive_on / repair_soon / unknown.
+
+**Token audit.** No existing severity hex changed, so no existing ratio comment
+was invalidated; the three new roles are decorative-free (all carry text) and
+their ratios are recorded in `app.css`. `--color-tech` still deferred.
+
+**Verification.** `bunx tsc --noEmit` → **0 errors**. `bun run build` → clean
+(`BUILD_EXIT=0`); grepped the emitted CSS to prove the new utilities compiled
+(`.bg-chrome`, `.text-on-chrome`, `.ring-on-ok{--tw-ring-color:var(--color-on-ok)}`,
+`.ring-inset`, `.bg-bezel`, `.bg-danger-solid`, `.text-\[28px\]{font-size:28px}`,
+`.h-1{height:var(--spacing)}`). `bun run test` → **185 passed / 16 skipped**, the
+3 DB suites aborting on the missing `TEST_DATABASE_URL` (unchanged baseline; the
+`test` script exits 1 by design). Browser pass against the built output on a
+spare port (`dist` + a throwaway `serve-verify.ts`, deleted afterwards) because
+the managed dev server answered 502: gallery `/app/_gallery` and `/app` with a
+throwaway `zz-a2-verify@imechanic.test` session, at 390×844 and 1280×800, light
+and dark, scrolling to the stop-driving panel in each. Throwaway user + session
+deleted.

@@ -19,6 +19,18 @@ import { SeverityIcon } from "../ui/severity-badge";
  * Three redundant signals + the unconditional 2px anchor border, at the
  * largest size in the app: this is the thing someone reads at a glance,
  * standing next to a running engine.
+ *
+ * A2 material (motifs 1 "telltale lamp", 2 "backlit bezel", 7 "hazard rule"):
+ *   - the severity chip is a ROUND LAMP — `rounded-full` with a 2px inset rim
+ *     in the `on-*` role. The rim is not `*-border` because in this palette
+ *     border and solid are the same hex, so a border-coloured rim on a solid
+ *     lamp would be invisible (see the `ring` field in `lib/severity.ts`);
+ *   - a 1px `--color-bezel` hairline runs along the card's top edge;
+ *   - `stop_driving` — and only `stop_driving` — carries a 4px
+ *     `--color-danger-solid` hazard rule across the card top. It is the one
+ *     place in the app that rule may appear.
+ * All three are static: no motion, no glow, no dimming. Nothing above is
+ * gated, and the glyphs, hexes and 2px anchor border are untouched.
  */
 
 export type VerdictSource = "rules" | "ai";
@@ -49,12 +61,27 @@ export function VerdictPanel({
     source === "ai" && !aiUnavailable
       ? APP_COPY.verdict.sourceAi
       : APP_COPY.verdict.sourceRules;
+  /* Hazard rule: stop_driving only. Decorative — the verdict is already
+     announced by the words, so this adds no information to a screen reader. */
+  const hazard = severity === "stop_driving";
 
   return (
     <section
       aria-label={APP_COPY.verdict.heading}
-      className={cn("rounded-card border-2 shadow-sm", c.border, c.fill, className)}
+      className={cn(
+        /* overflow-hidden keeps a flush top rule inside the card radius. */
+        "overflow-hidden rounded-card border-2 shadow-sm",
+        c.border,
+        c.fill,
+        className,
+      )}
     >
+      {/* Bezel: the 1px "backlit rim" on the plate's top edge (dark theme). */}
+      <div aria-hidden className="h-px w-full bg-bezel" />
+
+      {/* Hazard rule: 4px danger-solid across the top of a stop-driving card. */}
+      {hazard && <div aria-hidden className="h-1 w-full bg-danger-solid" />}
+
       <div className="p-5">
         <p
           className={cn(
@@ -66,11 +93,14 @@ export function VerdictPanel({
         </p>
 
         <div className="mt-3 flex items-start gap-4">
-          {/* Signal 2: silhouette, on a solid chip so it reads from a metre away. */}
+          {/* Signal 2: silhouette, on a solid lamp so it reads from a metre
+              away. The inset ring is the lamp's rim, not an outline: it never
+              grows the 56px footprint. */}
           <span
             className={cn(
-              "flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl",
+              "flex h-14 w-14 shrink-0 items-center justify-center rounded-full ring-2 ring-inset",
               c.solid,
+              c.ring,
               c.onSolid,
             )}
           >
@@ -78,8 +108,8 @@ export function VerdictPanel({
           </span>
 
           <div className="min-w-0">
-            {/* Signal 3: the words. */}
-            <h2 className={cn("text-2xl font-extrabold leading-tight tracking-tight", c.text)}>
+            {/* Signal 3: the words, at the largest size in the app. */}
+            <h2 className={cn("text-[28px] font-extrabold leading-tight tracking-tight", c.text)}>
               <span className="sr-only">{copy.announce}</span>
               <span aria-hidden>{copy.label}</span>
             </h2>
@@ -90,7 +120,8 @@ export function VerdictPanel({
         </div>
 
         {typeof codeCount === "number" && (
-          <p className={cn("mt-4 text-sm font-semibold", c.text)}>
+          /* Machine-read count: mono + tabular figures so it lines up. */
+          <p className={cn("num mt-4 font-mono text-sm font-semibold", c.text)}>
             {APP_COPY.verdict.codesLabel}: {codeCount}
           </p>
         )}

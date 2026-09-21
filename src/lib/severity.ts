@@ -60,6 +60,15 @@ export type SeverityClasses = {
   text: string;
   solid: string;
   onSolid: string;
+  /**
+   * The inset rim of the verdict "telltale lamp" (A2). This must be the
+   * `on-*` role and NOT `*-border`: in this palette `border` and `solid` are
+   * the *same hex* for every severity, so a border-coloured ring painted
+   * inset on a solid lamp is tonally invisible. `on-*` is the role already
+   * proven to read on that solid (5.2–6.5:1), which is what the rim of a
+   * lens needs. No hex is introduced or changed by this.
+   */
+  ring: string;
 };
 
 /** Full literal class strings — Tailwind's scanner needs to see them here. */
@@ -70,6 +79,7 @@ export const SEVERITY_CLASSES: Record<Severity, SeverityClasses> = {
     text: "text-ok-fg",
     solid: "bg-ok-solid",
     onSolid: "text-on-ok",
+    ring: "ring-on-ok",
   },
   repair_soon: {
     fill: "bg-warn-fill",
@@ -77,6 +87,7 @@ export const SEVERITY_CLASSES: Record<Severity, SeverityClasses> = {
     text: "text-warn-fg",
     solid: "bg-warn-solid",
     onSolid: "text-on-warn",
+    ring: "ring-on-warn",
   },
   stop_driving: {
     fill: "bg-danger-fill",
@@ -84,6 +95,7 @@ export const SEVERITY_CLASSES: Record<Severity, SeverityClasses> = {
     text: "text-danger-fg",
     solid: "bg-danger-solid",
     onSolid: "text-on-danger",
+    ring: "ring-on-danger",
   },
   unknown: {
     fill: "bg-neutral-fill",
@@ -91,6 +103,7 @@ export const SEVERITY_CLASSES: Record<Severity, SeverityClasses> = {
     text: "text-neutral-fg",
     solid: "bg-neutral-border",
     onSolid: "text-fg-invert",
+    ring: "ring-fg-invert",
   },
 };
 
