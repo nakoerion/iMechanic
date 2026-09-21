@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Card, ScreenHeader } from "../../components/app-shell";
 import { EmptyState } from "../../components/empty-state";
@@ -11,6 +11,10 @@ import {
 } from "../../components/icons";
 import { ProUpgradePrompt } from "../../components/pro/pro-prompt";
 import { Button } from "../../components/ui/button";
+import {
+  ComboboxField,
+  type ComboboxCopy,
+} from "../../components/ui/combobox-field";
 import { APP_COPY } from "../../lib/copy";
 import { useEntitlement } from "../../lib/entitlement";
 import {
@@ -18,6 +22,15 @@ import {
   vehicleCreateGate,
   type PlanPage,
 } from "../../lib/pro-limits";
+import {
+  catalogMakes,
+  isCatalogMake,
+  MAKE_ALIASES,
+  maxVehicleYear,
+  MIN_VEHICLE_YEAR,
+  modelsForMake,
+  yearSuggestions,
+} from "../../lib/vehicle-catalog";
 import {
   createVehicle,
   listVehicles,
@@ -30,11 +43,21 @@ export const Route = createFileRoute("/app/vehicles")({
 
 const v = APP_COPY.vehicles;
 
-/** The oldest model year the backend will store (see createVehicleCore). */
-const MIN_YEAR = 1980;
+/** The guidance/ARIA strings the three pickers share. */
+const PICKER_BASE = {
+  showSuggestions: v.picker.showSuggestions,
+  count: v.picker.count,
+  otherOption: v.picker.otherOption,
+  customNote: v.picker.customNote,
+};
 
-const INPUT_CLASS =
-  "mt-1 h-12 w-full rounded-control border-2 border-line-strong bg-surface px-3 text-base text-fg placeholder:text-fg-subtle focus:border-brand focus:outline-none";
+const MAKE_COPY: ComboboxCopy = {
+  ...PICKER_BASE,
+  listLabel: v.picker.make.listLabel,
+  hint: v.picker.make.hint,
+  listNote: v.picker.make.listNote,
+  emptyMessage: v.picker.make.emptyMessage,
+};
 
 type ListState =
   | { kind: "loading" }
@@ -57,8 +80,8 @@ function parseYear(raw: string): { year: number | null; error?: string } {
   if (trimmed === "") return { year: null };
   if (!/^\d{4}$/.test(trimmed)) return { year: null, error: v.yearInvalid };
   const parsed = Number(trimmed);
-  const newest = new Date().getFullYear() + 1;
-  if (parsed < MIN_YEAR || parsed > newest) {
+  const newest = maxVehicleYear();
+  if (parsed < MIN_VEHICLE_YEAR || parsed > newest) {
     return { year: null, error: v.yearInvalid };
   }
   return { year: parsed };
@@ -76,6 +99,40 @@ function AppVehicles() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  /* The pickers' suggestion lists. The catalog is static source, so it is read
+     once; the model list follows the make the user has picked or typed (and is
+     empty for a make we don't know — the field stays fully typeable). */
+  const makeOptions = useMemo(() => catalogMakes(), []);
+  const modelOptions = useMemo(() => modelsForMake(make), [make]);
+  const yearOptions = useMemo(() => yearSuggestions(), []);
+
+  const modelCopy = useMemo<ComboboxCopy>(
+    () => ({
+      ...PICKER_BASE,
+      listLabel: v.picker.model.listLabel,
+      hint: v.picker.model.hint,
+      listNote: v.picker.model.listNote,
+      /* A known make gets "no popular model matches that"; an unknown one gets
+         told why the list is empty in the first place. */
+      emptyMessage: isCatalogMake(make)
+        ? v.picker.model.emptyMessage
+        : v.picker.model.noMakeYet,
+    }),
+    [make],
+  );
+
+  const yearCopy = useMemo<ComboboxCopy>(
+    () => ({
+      listLabel: v.picker.year.listLabel,
+      hint: v.picker.year.hint(MIN_VEHICLE_YEAR, maxVehicleYear()),
+      listNote: v.picker.year.listNote,
+      emptyMessage: v.picker.year.emptyMessage,
+      showSuggestions: v.picker.showSuggestions,
+      count: v.picker.count,
+    }),
+    [],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -286,102 +343,54 @@ function AppVehicles() {
             {v.formHint}
           </p>
 
-          <form className="mt-4 space-y-3" onSubmit={onSubmit} noValidate>
-            <div>
-              <label
-                htmlFor="vehicle-make"
-                className="block text-xs font-semibold text-fg"
-              >
-                {v.makeLabel}
-              </label>
-              <input
-                id="vehicle-make"
-                name="make"
-                maxLength={80}
-                value={make}
-                onChange={(e) => setMake(e.target.value)}
-                placeholder={v.makeHint}
-                autoComplete="off"
-                enterKeyHint="next"
-                aria-invalid={errors.make ? true : undefined}
-                aria-describedby={errors.make ? "vehicle-make-error" : undefined}
-                className={INPUT_CLASS}
-              />
-              {errors.make && (
-                <p
-                  id="vehicle-make-error"
-                  role="alert"
-                  className="mt-1 text-xs font-medium text-danger-fg"
-                >
-                  {errors.make}
-                </p>
-              )}
-            </div>
+          <form className="mt-4 space-y-4" onSubmit={onSubmit} noValidate>
+            {/* Make and model are type-to-filter pickers over a SHORT curated
+                catalog (src/lib/vehicle-catalog.ts) with the full list of
+                suggestions one keypress away. Neither picker restricts what can
+                be saved: the input is the value, so a car that isn't in the
+                list is typed and kept exactly as written. */}
+            <ComboboxField
+              id="vehicle-make"
+              name="make"
+              label={v.makeLabel}
+              value={make}
+              onValueChange={setMake}
+              options={makeOptions}
+              copy={MAKE_COPY}
+              aliases={MAKE_ALIASES}
+              placeholder={v.makeHint}
+              error={errors.make}
+              enterKeyHint="next"
+            />
 
-            <div>
-              <label
-                htmlFor="vehicle-model"
-                className="block text-xs font-semibold text-fg"
-              >
-                {v.modelLabel}
-              </label>
-              <input
-                id="vehicle-model"
-                name="model"
-                maxLength={80}
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                placeholder={v.modelHint}
-                autoComplete="off"
-                enterKeyHint="next"
-                aria-invalid={errors.model ? true : undefined}
-                aria-describedby={
-                  errors.model ? "vehicle-model-error" : undefined
-                }
-                className={INPUT_CLASS}
-              />
-              {errors.model && (
-                <p
-                  id="vehicle-model-error"
-                  role="alert"
-                  className="mt-1 text-xs font-medium text-danger-fg"
-                >
-                  {errors.model}
-                </p>
-              )}
-            </div>
+            <ComboboxField
+              id="vehicle-model"
+              name="model"
+              label={v.modelLabel}
+              value={model}
+              onValueChange={setModel}
+              options={modelOptions}
+              copy={modelCopy}
+              placeholder={v.modelHint}
+              error={errors.model}
+              enterKeyHint="next"
+            />
 
-            <div>
-              <label
-                htmlFor="vehicle-year"
-                className="block text-xs font-semibold text-fg"
-              >
-                {v.yearLabel}
-              </label>
-              <input
-                id="vehicle-year"
-                name="year"
-                value={year}
-                onChange={(e) => setYear(e.target.value)}
-                placeholder={v.yearPlaceholder}
-                inputMode="numeric"
-                autoComplete="off"
-                aria-invalid={errors.year ? true : undefined}
-                aria-describedby={
-                  errors.year ? "vehicle-year-error" : undefined
-                }
-                className={INPUT_CLASS}
-              />
-              {errors.year && (
-                <p
-                  id="vehicle-year-error"
-                  role="alert"
-                  className="mt-1 text-xs font-medium text-danger-fg"
-                >
-                  {errors.year}
-                </p>
-              )}
-            </div>
+            {/* Year: a searchable list of years, with the numeric guard in
+                `parseYear` still deciding what is actually saved. */}
+            <ComboboxField
+              id="vehicle-year"
+              name="year"
+              label={v.yearLabel}
+              value={year}
+              onValueChange={setYear}
+              options={yearOptions}
+              copy={yearCopy}
+              placeholder={v.yearPlaceholder}
+              error={errors.year}
+              inputMode="numeric"
+              maxLength={4}
+            />
 
             {saveError && (
               <p

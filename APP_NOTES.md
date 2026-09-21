@@ -862,3 +862,46 @@ declaration was `ext.kotlinVersion` in `variables.gradle`.
   configuring `:app` and `:capacitor-cordova-android-plugins`. This is the
   lightweight configuration proof — a real `assemble`/`bundle` still needs the
   toolchain in the owner's environment.
+
+## S8 — make → model → year pickers on "Add vehicle" (frontend suggestion aid)
+The owner's complaint: three bare text inputs with no guidance. They are now
+type-to-filter pickers over a **curated static catalog**. No schema change, no
+server change, no new dependency, no network call.
+
+- **`src/lib/vehicle-catalog.ts` (new).** Static source in the spirit of
+  `dtc_catalog`: 53 common makes for DE/UK/AL, each with its common models;
+  `MIN_VEHICLE_YEAR` (1980), `maxVehicleYear()` (next calendar year),
+  `yearSuggestions()` (newest first), `normalizeVehicleTerm()` (case / accent /
+  punctuation folded, so "Škoda" = "skoda" and "3 Series" = "3 series"),
+  `filterTerms()` (prefix matches first, then contains, capped), `MAKE_ALIASES`
+  (search-only short forms: "vw" → Volkswagen, "mercedes" → Mercedes-Benz,
+  "Range Rover" → Land Rover), `resolveCatalogMake()` / `modelsForMake()` /
+  `isCatalogMake()` / `isListedValue()`.
+- **`src/components/ui/combobox-field.tsx` (new).** The WAI-ARIA editable-combobox
+  pattern: `role="combobox"` input with `aria-expanded` / `aria-controls` /
+  `aria-activedescendant`, a `role="listbox"` popup of `role="option"` rows, a
+  sticky footer that says the list is partial, and an sr-only live count. Keys:
+  ArrowDown/ArrowUp open + move, Enter takes the highlighted row, Escape closes,
+  Tab moves on; a row only highlights once arrowed onto, so Enter on freshly typed
+  text still submits the form as typed. A chevron button (out of the tab order)
+  opens the list without relying on hover. Tokens only, mobile-first.
+- **Suggestions, never a gate.** The input *is* the value — `createVehicle` and the
+  schema still accept any non-empty make/model. A non-catalog value gets a trailing
+  "Other — save “x” exactly as I typed it" row plus a note under the field; an
+  unknown make yields **no** model suggestions (never another make's models) and
+  says so. Copy says "popular", never "all models".
+- **Copy.** New `APP_COPY.vehicles.picker.*` block (per-field `hint` / `listLabel` /
+  `listNote` / `emptyMessage`, plus `otherOption`, `customNote`, `count`,
+  `showSuggestions`); `makeHint` / `modelHint` / `yearPlaceholder` reworded as
+  picker placeholders. Nothing else on the screen changed.
+- **Untouched:** the create flow, `parseYear` (still the numeric guard: 4 digits,
+  1980..next year), the free-garage-limit refusal wording, and the
+  re-read-from-server-after-save behaviour.
+- **Tests:** `tests/vehicle-catalog.test.ts` — 33 pure tests (catalog shape,
+  normalisation, filtering/ranking, alias matching, make→model cascade, "no
+  suggestions for an unknown make", year range + decade narrowing).
+  `bunx tsc --noEmit` clean, `bun run build` clean, 33/33 new tests pass.
+- **Verified in a real browser** at 390×844: hints render, focusing the empty make
+  field opens the popular-makes list, typing "vw" suggests "Volkswagen" alongside
+  the "Other — save what I typed" row, ArrowDown + Enter selects it, the model list
+  then follows the make (typing "gol" → Golf), and the year list filters on "201".
