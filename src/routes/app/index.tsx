@@ -1,9 +1,9 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import {
   ArrowRightIcon,
+  EngineIcon,
   HistoryIcon,
   ScanIcon,
-  WrenchIcon,
 } from "../../components/icons";
 import { buttonClasses } from "../../components/ui/button";
 import { cn } from "../../lib/cn";
@@ -71,7 +71,7 @@ function AppHome() {
       {/* Golden path reference */}
       <section className="rounded-2xl border border-line bg-surface p-5 shadow-sm">
         <h2 className="flex items-center gap-2 text-sm font-bold text-fg">
-          <WrenchIcon className="h-4 w-4 text-brand-strong" />
+          <EngineIcon className="h-4 w-4 text-brand-strong" />
           Every session follows the same path
         </h2>
         <ol className="mt-4 flex flex-wrap gap-2">

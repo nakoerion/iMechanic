@@ -12,7 +12,7 @@ import {
   Note,
   SectionHeader,
   TickIcon,
-  WrenchMark,
+  EngineMark,
   ctaOnNavy,
   ctaOnWhite,
   ctaPrimary,
@@ -229,7 +229,7 @@ function Nav() {
           className="flex items-center gap-2 rounded-control text-white"
         >
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand text-on-brand">
-            <WrenchMark className="h-4.5 w-4.5" />
+            <EngineMark className="h-4.5 w-4.5" />
           </span>
           <span className="text-lg font-bold tracking-tight">iMechanic</span>
         </a>
@@ -274,7 +274,7 @@ function Hero() {
       <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-4 pb-14 pt-12 sm:px-6 lg:grid-cols-[1.1fr_0.9fr] lg:gap-10 lg:pb-20 lg:pt-18">
         <div>
           <p className="im-rise mb-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-amber-300">
-            <WrenchMark className="h-3.5 w-3.5" />
+            <EngineMark className="h-3.5 w-3.5" />
             For out-of-warranty car owners
           </p>
           <h1 className="im-rise im-delay-1 text-[2.6rem] font-extrabold leading-[1.03] tracking-tight sm:text-5xl lg:text-[3.75rem]">
@@ -833,7 +833,7 @@ function Footer() {
           <div>
             <div className="flex items-center gap-2 text-white">
               <span className="flex h-7 w-7 items-center justify-center rounded-md bg-brand text-on-brand">
-                <WrenchMark className="h-4 w-4" />
+                <EngineMark className="h-4 w-4" />
               </span>
               <span className="text-base font-bold tracking-tight">
                 iMechanic

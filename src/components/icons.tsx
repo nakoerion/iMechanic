@@ -29,15 +29,19 @@ export function HomeIcon(props: IconProps) {
   );
 }
 
+/**
+ * Scan — an engine block under a scan sweep.
+ *
+ * Replaces the generic magnifier (a magnifier reads as "search", and this
+ * product does not search anything: it interrogates an engine). The engine
+ * silhouette is the same family as `EngineIcon` below, so the brand mark, the
+ * scan tab and the scan screen all speak one shape.
+ */
 export function ScanIcon(props: IconProps) {
   return (
     <svg {...base(props)}>
-      <circle cx="11" cy="11" r="7" />
-      <path d="m21 21-4.35-4.35" />
-      <path d="M8 3H4a1 1 0 0 0-1 1v4" />
-      <path d="M16 3h4a1 1 0 0 1 1 1v4" />
-      <path d="M8 21H4a1 1 0 0 1-1-1v-4" />
-      <path d="M16 21h4a1 1 0 0 0 1-1v-4" />
+      <path d="M4.7 9.6a8 8 0 0 1 14.6 0" />
+      <path d="M5.9 19.3V14h2.3v-2.3h5.3V14h2.4v1.3h1.9v2.3h-1.9v1.7z" />
     </svg>
   );
 }
@@ -237,6 +241,128 @@ export function PlugIcon(props: IconProps) {
       <path d="M15 2v6" />
       <path d="M7 8h10v3a5 5 0 0 1-5 5 5 5 0 0 1-5-5V8Z" />
       <path d="M12 16v6" />
+    </svg>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Automotive set                                                      */
+/*                                                                     */
+/* The shapes a driver already knows from the dashboard and the        */
+/* engine bay. Same grammar as the rest of the set: 24x24, 2px         */
+/* stroke, `currentColor` only — never a hard-coded hex, so every one  */
+/* of them inherits the surrounding colour role in light and dark.     */
+/*                                                                     */
+/* These are pictograms, not severity signals. The four severity       */
+/* glyphs above (DriveOn / RepairSoon / StopDriving / Unknown) are the */
+/* only shapes allowed to carry a verdict.                             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The engine block / MIL telltale — the brand mark and the one shape this
+ * whole product is about. Silhouette: cam-cover hump, snout on the left,
+ * housing on the right, with the fault bolt inside the block.
+ */
+export function EngineIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M2.7 12.3h1.8v-2.2h3.7V6.7h6.5v3.4h3.7v2.2h2.9v3h-2.9v3.1H4.5v-2.6H2.7z" />
+      <path d="m13 12.1-2.1 3.1h2.2l-2 2.6" />
+    </svg>
+  );
+}
+
+/**
+ * The OBD2 socket — the 16-pin D-shaped trapezoid under the dashboard.
+ * The pin rows are indicative, not counted: sixteen 1px dots would silt up
+ * into a grey bar at 24px, so two rows of four read as "pins" instead.
+ */
+export function ObdPortIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M3.4 7.4h17.2v4.3L18 15H6L3.4 11.7z" />
+      <path d="M7.2 10.2h.01" />
+      <path d="M10.4 10.2h.01" />
+      <path d="M13.6 10.2h.01" />
+      <path d="M16.8 10.2h.01" />
+      <path d="M8.4 12.9h.01" />
+      <path d="M11.6 12.9h.01" />
+      <path d="M14.8 12.9h.01" />
+    </svg>
+  );
+}
+
+/** The OBD2 adapter itself: dongle body, connector nose, status LED. */
+export function AdapterIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <rect x="2.8" y="7.4" width="13.2" height="9.2" rx="2.2" />
+      <path d="M16 9.6h3.6l1.6 2.4-1.6 2.4H16" />
+      <path d="M6.3 12h.01" />
+      <path d="M9.2 12h3.4" />
+    </svg>
+  );
+}
+
+/** An instrument dial — used for readings, live values and the cluster motif. */
+export function GaugeIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M3.5 18a8.5 8.5 0 1 1 17 0" />
+      <path d="M12 18l4.3-5.1" />
+      <path d="M12 18h.01" />
+    </svg>
+  );
+}
+
+/** Bluetooth — the adapter link state. */
+export function BluetoothIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="m7 7 10 10-5 5V2l5 5L7 17" />
+    </svg>
+  );
+}
+
+/** A car battery — system voltage, not a phone battery. */
+export function BatteryIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <rect x="2.8" y="8" width="18.4" height="11.2" rx="2.2" />
+      <path d="M6.6 8V5.6h3.1V8" />
+      <path d="M14.3 8V5.6h3.1V8" />
+      <path d="M6.4 13.6h3.2" />
+      <path d="M8 12v3.2" />
+      <path d="M14.4 13.6h3.2" />
+    </svg>
+  );
+}
+
+/** A thermometer — coolant and intake temperature readings. */
+export function ThermoIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M13.6 14.4V5.3a2.3 2.3 0 0 0-4.6 0v9.1a4.1 4.1 0 1 0 4.6 0z" />
+      <path d="M16.6 7.4h2.6" />
+      <path d="M16.6 11h2.6" />
+    </svg>
+  );
+}
+
+/**
+ * A tachometer sweep — the arc of ticks with the needle rising through it.
+ * Pair it with the scanning state: it is a progress motif, not a measurement,
+ * so it must never sit next to a number it does not actually represent.
+ */
+export function SweepIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M3 15h2.2" />
+      <path d="m5.6 8.6 1.6 1.6" />
+      <path d="M12 6v2.2" />
+      <path d="m18.4 8.6-1.6 1.6" />
+      <path d="M21 15h-2.2" />
+      <path d="M12 15 9.6 9.7" />
     </svg>
   );
 }
