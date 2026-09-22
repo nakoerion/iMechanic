@@ -168,6 +168,23 @@ export const APP_COPY = {
       "Uses the app's own Bluetooth bridge — that is what makes a real adapter work on iPhone, where the browser has no Bluetooth of its own.",
     liveConnecting: "Connecting…",
     liveReading: "Reading codes…",
+    /* A5 — the ignition sequence. `steps` are the approved procedure names
+     * (proposal §4); they label the four ticks on the rail, and are never
+     * rendered as a claim of their own. `railLabel` and `transcriptLabel` are
+     * field legends, like `faultCode.systemLabel`. */
+    steps: {
+      connect: "Connect",
+      initialise: "Initialise",
+      read: "Read",
+      interpret: "Interpret",
+    },
+    railLabel: "Scan procedure",
+    /* The live-only transcript panel. It shows exchanges the adapter actually
+     * sent — never a raw dump, never a synthesised line. */
+    transcriptLabel: "Adapter link",
+    /* Status line for the final rail step: the app is running the fault-code
+     * rulebook over the codes it just read. */
+    interpreting: "Interpreting the codes…",
     liveUnavailableTitle: "Live connect isn't available in this browser",
     liveUnavailableDescription:
       "This browser supports neither Web Bluetooth nor Web Serial, so it cannot talk to an OBD2 adapter. Demo mode works everywhere with no hardware, or type a code in manually.",

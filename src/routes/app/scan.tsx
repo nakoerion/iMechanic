@@ -12,6 +12,13 @@ import {
   SweepIcon,
 } from "../../components/icons";
 import { FaultCodeCard } from "../../components/severity/fault-code-card";
+import {
+  LiveTranscript,
+  PhaseRail,
+  scanStepIndex,
+  stepForCommand,
+  type ScanStep,
+} from "../../components/scan/ignition-sequence";
 import { AiRootCausePanel } from "../../components/severity/ai-root-cause-panel";
 import { VerdictPanel } from "../../components/severity/verdict-panel";
 import { CostDecisionCard } from "../../components/decide/cost-decision-card";
@@ -30,7 +37,7 @@ import {
 import type { Severity } from "../../lib/severity";
 import { DemoDriver } from "../../obd/demo-simulator";
 import { browserCapabilities } from "../../obd/driver";
-import type { ObdCapabilities, ObdScanResult } from "../../obd/driver";
+import type { ObdCapabilities, ObdScanResult, ObdTranscriptEntry } from "../../obd/driver";
 import { LiveElmDriver, type LiveConnectChoice } from "../../obd/elm327-live";
 import {
   createVehicle,
@@ -53,8 +60,16 @@ const statusLabel = APP_COPY.faultCode.statusLabel;
 
 type Phase =
   | { kind: "idle" }
-  | { kind: "working"; label: string }
+  /* A5: `step` is the ignition-sequence rail position. It is null when there
+     is no adapter procedure to report — manual entry is a save, not a scan, so
+     it shows the status line alone. */
+  | { kind: "working"; label: string; step: ScanStep | null }
   | { kind: "error"; message: string };
+
+/* How many transcript exchanges the screen keeps in state. The panel renders
+   the last few of them; nothing here is persisted (raw_json stays the driver's
+   own full log). */
+const TRANSCRIPT_BUFFER = 6;
 
 const SOURCE_BADGE: Record<ScanSource, string> = {
   demo: t.resultDemoBadge,
@@ -87,6 +102,10 @@ function AppScan() {
   const [attachError, setAttachError] = useState<string | null>(null);
 
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
+  /* A5: the live adapter conversation as it arrives, from the driver's
+     observer. Empty for demo and manual runs — and therefore no transcript
+     block. */
+  const [transcript, setTranscript] = useState<ObdTranscriptEntry[]>([]);
   const [manualCode, setManualCode] = useState("");
   const [manualInvalid, setManualInvalid] = useState(false);
 
@@ -161,7 +180,8 @@ function AppScan() {
   }
 
   async function onDemoScan() {
-    setPhase({ kind: "working", label: t.demoRunning });
+    setTranscript([]);
+    setPhase({ kind: "working", label: t.demoRunning, step: "connect" });
     try {
       // NOTE: no demoDriver.reset() here. A cleared demo adapter must READ
       // EMPTY on the next demo scan — that is the re-scan-verify flow QA
@@ -169,7 +189,15 @@ function AppScan() {
       // is only used by tests and by the S5 verify flow when the demo car's
       // faults are deliberately restored.
       await demoDriver.connect();
+      /* A5: the demo adapter's connect() IS its simulated handshake
+         (`demo-simulator.ts`: "Simulated handshake: no transport, nothing to
+         fail"), so Initialise is complete the moment it returns. The label
+         stays "Reading demo codes…" throughout — the rail carries the finer
+         procedure detail, and the demo button's own loading state keys off
+         this exact label. */
+      setPhase({ kind: "working", label: t.demoRunning, step: "read" });
       const result = await demoDriver.readCodes();
+      setPhase({ kind: "working", label: t.demoRunning, step: "interpret" });
       const ok = await persistScan("demo", result);
       if (ok) setPhase({ kind: "idle" });
     } catch {
@@ -187,7 +215,9 @@ function AppScan() {
       return;
     }
     setManualInvalid(false);
-    setPhase({ kind: "working", label: t.manualSaving });
+    /* A5: no rail — a typed code is saved, not read off a car, so there is no
+       adapter procedure to report. */
+    setPhase({ kind: "working", label: t.manualSaving, step: null });
     const ok = await persistScan("manual", {
       codes: (normals as string[]).map((code) => ({
         code,
@@ -203,12 +233,32 @@ function AppScan() {
 
   async function onLiveConnect(choice: LiveConnectChoice) {
     setLiveBusy(choice);
-    setPhase({ kind: "working", label: t.liveConnecting });
+    setTranscript([]);
+    setPhase({ kind: "working", label: t.liveConnecting, step: "connect" });
     const driver = new LiveElmDriver(choice);
+    /* A5: watch the adapter conversation while it happens. The observer only
+       ever APPENDS what the driver logged, and it advances the rail from real
+       commands — the ELM327 handshake is Initialise, the read services are
+       Read — so the rail can never show a step the app has not reached. */
+    const unsubscribe = driver.onTranscriptEntry((entry) => {
+      setTranscript((prev) => [...prev, entry].slice(-TRANSCRIPT_BUFFER));
+      const next = stepForCommand(entry.command);
+      if (!next) return;
+      setPhase((prev) =>
+        prev.kind === "working" &&
+        prev.step !== null &&
+        scanStepIndex(next) > scanStepIndex(prev.step)
+          ? { ...prev, step: next }
+          : prev,
+      );
+    });
     try {
       await driver.connect();
-      setPhase({ kind: "working", label: t.liveReading });
+      setPhase({ kind: "working", label: t.liveReading, step: "read" });
       const result = await driver.readCodes();
+      /* The last rail step: the codes are in and the app is running the
+         fault-code rulebook over them as the scan is saved. */
+      setPhase({ kind: "working", label: t.interpreting, step: "interpret" });
       const ok = await persistScan("live", result);
       if (ok) setPhase({ kind: "idle" });
     } catch (err) {
@@ -225,6 +275,7 @@ function AppScan() {
         message: `${t.liveErrorPrefix} ${detail}${hint ? ` ${hint}` : ""}`,
       });
     } finally {
+      unsubscribe();
       await driver.disconnect().catch(() => undefined);
       setLiveBusy(null);
     }
@@ -315,15 +366,26 @@ function AppScan() {
       {/* Working state (connecting / reading codes). A4: the tach sweep is the
           progress motif, and it reports that a procedure is running — never a
           measurement — so it sits beside the status label and never next to a
-          number. The label is the same copy the buttons already use. */}
+          number. The label is the same copy the buttons already use.
+          A5: the dead seconds become an ignition sequence — the four-step rail
+          plus, on a live scan only, the adapter conversation ticking in mono.
+          The rail is absent for manual entry (there is no adapter procedure to
+          report) and the transcript is absent unless the adapter actually said
+          something, so neither can ever be decorative filler. */}
       {phase.kind === "working" && (
-        <p
-          role="status"
-          className="flex items-center gap-2 rounded-card border border-line bg-surface-sunken px-3 py-2.5 text-sm font-semibold text-fg"
-        >
-          <SweepIcon className="h-5 w-5 shrink-0 text-brand-strong motion-safe:animate-spin" />
-          {phase.label}
-        </p>
+        <div className="space-y-2.5 rounded-card border border-line bg-surface-sunken px-3 py-3">
+          {phase.step && <PhaseRail activeStep={phase.step} />}
+          <p
+            role="status"
+            className="flex items-center gap-2 text-sm font-semibold text-fg"
+          >
+            <SweepIcon className="h-5 w-5 shrink-0 text-brand-strong motion-safe:animate-spin" />
+            {phase.label}
+          </p>
+          {liveBusy !== null && transcript.length > 0 && (
+            <LiveTranscript entries={transcript} />
+          )}
+        </div>
       )}
 
       {/* Last scan result — the payoff of the screen. */}

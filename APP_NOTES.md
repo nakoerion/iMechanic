@@ -1180,3 +1180,134 @@ Rule going forward: anything rendered during SSR must be formatted by us, never 
 - Verified: `tsc --noEmit` 0 errors, `bun run build` clean, `bun run test` 185 passed |
   16 skipped (the 3 DB suites abort on the missing `TEST_DATABASE_URL`, exit 1 by design),
   landing + `/app/scan` loaded signed-in at 390x844.
+
+## A5 — scan/connect ignition sequence (branch `a5-scan-ignition-sequence`)
+
+Slice A5 of `/home/team/shared/UI_REDESIGN_PROPOSAL.md` §4 (`routes/app/scan.tsx`) and §6:
+the dead seconds of a scan become an ignition sequence — a four-state procedure rail plus,
+on a live scan only, the ELM327 conversation ticking in mono under a `--color-tech` label.
+The A4 sweep stays exactly where it was, beside the status label.
+
+### What ships
+
+- **`src/components/scan/ignition-sequence.tsx` (new).**
+  - `PhaseRail({ activeStep })` — four ticks on a horizontal rail: completed steps carry a
+    `CheckIcon` in `--color-tech`, the current step's 3px tick is filled and
+    `motion-safe:animate-pulse`s, upcoming steps are a `border-line`-coloured tick.
+    `aria-current="step"` marks the current one; the list is `aria-label`led ("Scan
+    procedure"). **Not a telltale lamp** (that motif is the verdict's alone): the state
+    marker is a bar, never a ringed chip.
+  - `LiveTranscript({ entries })` — the **last 3** exchanges only, in `font-mono`, under a
+    `--color-tech` uppercase legend. Each reply is collapsed to one line
+    (`formatTranscriptResponse`: whitespace runs → single spaces, the ELM327 `>` prompt
+    dropped as a turn marker rather than data, capped at 72 chars with an ellipsis, empty
+    reply → `—`). **Never a raw dump**; `role="group"` + `aria-label`, deliberately not a
+    live region (the `role="status"` line above already announces each phase).
+  - Renders `null` when `entries` is empty — so demo/manual runs show no transcript box at
+    all, and no caller has to remember to hide it.
+- **`--color-tech` (`app.css`).** Light `#155e75`, dark `#7dd3fc` — the proposal's
+  candidates, now audited. Measured (audit-token-contrast method, both themes): on
+  `surface-sunken` **6.95:1** light / **11.23:1** dark, on `surface` 7.27 / 10.42, on
+  `app-bg` 6.63 / 11.66 — all well over the 4.5:1 text threshold, and recorded as a comment
+  in the `:root` and `.dark` role blocks. Declared the full dual-token way
+  (`--ui-tech` in both themes, `--color-tech: var(--ui-tech)` in `@theme`, re-declared in
+  the `.dark` role block so a nested dark subtree resolves it). The pending tick uses
+  `--color-line` (1.18:1 light / 1.48:1 dark) — **decorative by design**: rail position and
+  the label colour carry the state, and it is never the only signal.
+- **The driver observer (`src/obd/elm327-live.ts`).** New
+  `onTranscriptEntry(listener) => unsubscribe` on `LiveElmDriver`. It fires once per
+  command exchange, immediately after `appendTranscriptEntry`, with a **copy** of the entry
+  (the UI holds these; the driver keeps its own log). Listeners are called in a try/catch so
+  a rendering bug can never fail a scan. `getTranscript()` — and therefore what
+  `saveScan` persists to `raw_json` — is unchanged, and nothing in the UI surface renders
+  `raw_json`.
+- **The screen (`src/routes/app/scan.tsx`).** `Phase` gains `step: ScanStep | null`, and
+  the working row becomes a `surface-sunken` panel holding the rail + the A4 sweep/status
+  line + (live only) the transcript. The rail is advanced from **real events only**:
+  `connect()` starts it at Connect; the observer maps an arriving handshake command
+  (`AT*`, including the `0100` bank-detect) to **Initialise** and a read service
+  (`03`/`07`/`0A`/`0902`) to **Read**, never moving backwards; the screen sets **Read** when
+  `readCodes()` starts and **Interpret** while `persistScan()` (the rules engine) runs.
+- **Demo path:** the same four-step rail, because the demo adapter's `connect()` *is* its
+  simulated handshake (`demo-simulator.ts`) — so it returns with Connect **and** Initialise
+  complete, then Read, then Interpret. Its status label stays `demoRunning` (the demo
+  button's loading state keys off that exact string). **Manual path:** `step: null`, so no
+  rail — a typed code is saved, not read off a car, and there is no procedure to report.
+- **New copy (`src/lib/copy.ts`, `scan.*`):** `steps.{connect,initialise,read,interpret}`
+  (the four approved procedure names), `railLabel` and `transcriptLabel` (field legends, the
+  `faultCode.systemLabel` precedent), and `interpreting` ("Interpreting the codes…") — the
+  status line for the final step, in the same family as `liveConnecting`/`liveReading`. No
+  prices, no claims, nothing else added. **The brief said to match an "EN + DE pattern" in
+  the scan screen's translations — there is no DE bundle: `copy.ts` is English-only by
+  design ("the beta is English-only, but no string is inlined in JSX"), so the new entries
+  follow the existing single-language pattern and land in the future `en` bundle
+  automatically.** (Flagged for the lead; the app has no i18n layer to add a German key to.)
+- **Untouched, by contract:** every severity hex/glyph/verdict, the free-vs-Pro gating and
+  `LockIcon` rules, the clear-codes flow, `--color-line`/`--color-hairline`, and the A4
+  `SweepIcon` usage. No free surface gained a lock, a blur or a dim.
+
+### Tests (`tests/scan-ignition.test.ts`, 13 new, pure — no hardware, no DB)
+
+A fake ELM327 over **Web Serial** (`requestPort` → open → readable/writable) drives a real
+`connect()` + `readCodes()`: it asserts the commands actually sent
+(`ATZ, ATE0, ATH0, 0100, 03, 07, 0A, 0902`), that the observer received every one of them,
+that the persisted transcript is unchanged (same content, distinct objects), that
+`unsubscribe()` stops delivery, and that a listener which throws cannot fail a scan. The
+rendering half uses **injected fake entries**: the rail's four labels/one `aria-current`,
+the check marks per step, `null` for an empty transcript, only the last 3 lines, the
+single-line collapse (no `\r`, no prompt, no raw JSON), the 72-char cap and the `—` for an
+empty reply.
+
+### Found while testing — pre-existing S7 defect (NOT fixed here, reported)
+
+`bleTransport` in `src/obd/elm327-live.ts` never **calls**
+`characteristic.addEventListener("characteristicvaluechanged", onNotify)` — it only calls
+`removeEventListener` in `close()` (and carries a `void onNotify;` line that silences the
+unused-symbol warning). A real BLE characteristic therefore never notifies, so
+`readUntilPrompt` always hits its 8s timeout and **a Web Bluetooth scan can never get past
+the first `ATZ`** — it fails with "The adapter stopped answering mid-scan." The Web Serial
+transport is untouched here (fix belongs in its own slice with its own verification), but
+the Web Serial half of that claim was **wrong** and A5's own test pass is what disproved
+it — do not repeat it:
+
+- `serialTransport`'s `writeLine()` **awaited** `ensurePump()`, and `ensurePump()` only
+  settles when the port's readable stream ends (`for (;;) await reader.read()`). The first
+  command therefore never reached the wire: `ATZ` was never written, `readUntilPrompt()`
+  was never reached, and a USB-serial scan hung rather than failing. Reproduced with a
+  standalone fake-port script before touching anything (`writes=[]`, watchdog at 6s).
+- **Fixed in A5** (3 lines, same file): `writeLine()` starts the pump in the background
+  (`void ensurePump().catch(() => undefined)`) instead of awaiting it, and
+  `readUntilPrompt()` rejects immediately with `pumpFailed` when the pump is already dead
+  rather than sitting out the 8s timeout. The shared-pump design is unchanged — it now
+  actually runs. This is the only production change A5 needed; the intent was always a
+  background pump (the comment above it says so), so no `LineTransport` contract moved.
+- The defect dated from S3 (#5), i.e. **it predates the redesign and was never exercised**
+  because nothing drove an end-to-end serial exchange until A5's test did.
+
+### Verification (all figures measured, 2026-09-22, branch `a5-scan-ignition-sequence`)
+
+- `node --max-old-space-size=1200 node_modules/typescript/bin/tsc --noEmit` → **0 errors**
+  (`TSC_EXIT=0`).
+- `bun run build` → clean (`BUILD_EXIT=0`); client + SSR environments built, scan chunk
+  emitted.
+- `bun run test` → **198 passed | 16 skipped (214)** across 14 files. `tests/scan-ignition.test.ts`
+  → **13/13 passed** in 1.23s. 11 files pass; the 3 DB-backed suites
+  (`migrate.test.ts`, `schema.test.ts`, `obd.test.ts`'s isolated-DB block) abort with
+  "TEST_DATABASE_URL is not set", so the script exits 1 **by design** — judge it by the
+  passed/skipped counts.
+- Browser, signed in with a throwaway session, against the **built** output on a spare port,
+  at 390×844 **and** 1280×800, light **and** dark (4 passes, all identical). Rail states were
+  recorded from the live DOM with a `MutationObserver` during the demo scan, not eyeballed:
+  `no rail → Connect current → Connect✓ Initialise✓ Read✓ + Interpret current → no rail`.
+  The status line read "Reading demo codes…" throughout and the transcript group
+  (`[aria-label="Adapter link"]`) was **absent in every recorded state**, and `0 rails /
+  0 transcripts` once the scan settled. The manual path (`P0301` → "Save as scan") recorded
+  **`rail: null` in all three states**, with the status line alone showing "Saving…".
+  `errors` and `console` were **empty after every pass** (zero console errors; the built
+  output has no HMR websocket noise). Screenshots: `/tmp/a5-mobile-demo-rail.png` (rail at
+  Interpret, all four ticks) plus `a5-{mobile-dark,desktop-light,desktop-dark}-{demo,manual}.png`.
+- Cleanup: the throwaway user (and its cascaded session/scans) was deleted; 0 orphan rows.
+- Real hardware is not available here, so the live-only transcript content stays covered by
+  the injected-entry unit tests; the serial transport itself is now genuinely exercised
+  end-to-end by the A5 tests (that is what exposed the pump bug above).
+

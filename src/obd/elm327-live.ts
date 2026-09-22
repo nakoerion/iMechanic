@@ -239,7 +239,13 @@ function serialTransport(port: SerialPortLike, name: string): LineTransport {
     name,
     async writeLine(line: string) {
       if (!port.writable) throw new ObdError("Could not write to the serial port.");
-      await ensurePump();
+      // Start the shared reader pump and keep going. `ensurePump()` only
+      // settles when the port's readable stream ends, so awaiting it would
+      // block *every* command forever — the adapter would never receive one
+      // byte. The pump runs for the life of the port; a failure surfaces
+      // through `pumpFailed`, which `readUntilPrompt()` reports instead of
+      // waiting out the timeout.
+      void ensurePump().catch(() => undefined);
       const writer = port.writable.getWriter();
       try {
         await writer.write(encoder.encode(`${line}\r`));
@@ -250,6 +256,12 @@ function serialTransport(port: SerialPortLike, name: string): LineTransport {
     },
     readUntilPrompt(timeoutMs = READ_TIMEOUT_MS) {
       return new Promise<string>((resolve, reject) => {
+        // A pump that is already dead fails fast and honestly, rather than
+        // sitting out the full timeout and blaming the adapter.
+        if (pumpFailed) {
+          reject(pumpFailed);
+          return;
+        }
         const timer = setTimeout(() => {
           const i = waiters.findIndex((w) => w.resolve === resolve);
           if (i >= 0) waiters.splice(i, 1);
@@ -295,6 +307,13 @@ export class LiveElmDriver implements ObdDriver {
   private readonly choice: LiveConnectChoice;
   /** Session transcript: timestamped command → raw-reply pairs (R3). */
   private transcriptLog: ObdTranscriptEntry[] = [];
+  /**
+   * A5 observers: called with each exchange as it is logged, so the scan screen
+   * can show the adapter conversation while it happens instead of waiting for
+   * `getTranscript()` at the end. Purely additive — what gets persisted to
+   * `raw_json` is unchanged, and a listener that throws can never fail a scan.
+   */
+  private transcriptListeners = new Set<(entry: ObdTranscriptEntry) => void>();
 
   constructor(choice: LiveConnectChoice) {
     this.choice = choice;
@@ -327,7 +346,35 @@ export class LiveElmDriver implements ObdDriver {
     await t.writeLine(cmd);
     const reply = await t.readUntilPrompt();
     appendTranscriptEntry(this.transcriptLog, cmd, reply);
+    const entry = this.transcriptLog[this.transcriptLog.length - 1]!;
+    // Hand the observer its own copy: the UI holds these in state, and the
+    // persisted log is the driver's. Nothing mutates either.
+    this.emitTranscript({ ...entry });
     return reply;
+  }
+
+  /**
+   * Subscribe to the transcript as it grows. Returns an unsubscribe function —
+   * call it when the scan finishes (the screen does, in its `finally`).
+   *
+   * A5: this is the only new surface on the driver. `getTranscript()` still
+   * returns the whole session and is still what `saveScan` persists.
+   */
+  onTranscriptEntry(listener: (entry: ObdTranscriptEntry) => void): () => void {
+    this.transcriptListeners.add(listener);
+    return () => {
+      this.transcriptListeners.delete(listener);
+    };
+  }
+
+  private emitTranscript(entry: ObdTranscriptEntry): void {
+    for (const listener of [...this.transcriptListeners]) {
+      try {
+        listener(entry);
+      } catch {
+        /* A rendering bug must never turn into a failed scan. */
+      }
+    }
   }
 
   async connect(): Promise<void> {
