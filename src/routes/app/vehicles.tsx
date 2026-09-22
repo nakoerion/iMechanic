@@ -243,7 +243,7 @@ function AppVehicles() {
       {state.kind === "loading" && (
         <p
           role="status"
-          className="flex items-center justify-center gap-2 rounded-card border border-line bg-surface px-6 py-10 text-sm font-medium text-fg-muted"
+          className="flex items-center justify-center gap-2 rounded-card border border-line bg-surface px-6 py-10 text-sm font-medium text-fg-muted shadow-card"
         >
           <SpinnerIcon className="h-5 w-5 animate-spin" aria-hidden />
           {v.loading}
@@ -251,8 +251,8 @@ function AppVehicles() {
       )}
 
       {state.kind === "error" && (
-        <section className="flex flex-col items-center rounded-card border border-line bg-surface px-6 py-10 text-center shadow-sm">
-          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-neutral-fill text-danger-fg">
+        <section className="flex flex-col items-center rounded-card border border-line bg-surface px-6 py-10 text-center shadow-card">
+          <span className="flex h-12 w-12 items-center justify-center rounded-control bg-neutral-fill text-danger-fg">
             <AlertIcon className="h-6 w-6" aria-hidden />
           </span>
           <h2 className="mt-4 text-lg font-bold text-fg">{v.errorTitle}</h2>
@@ -332,7 +332,7 @@ function AppVehicles() {
       {state.kind === "ready" && notice && (
         <p
           role="status"
-          className="flex items-start gap-2 rounded-card border border-line bg-surface p-3 text-xs font-medium text-fg-muted"
+          className="flex items-start gap-2 rounded-card border border-line bg-surface p-3 text-xs font-medium text-fg-muted shadow-card"
         >
           <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-fg-subtle" aria-hidden />
           {notice}

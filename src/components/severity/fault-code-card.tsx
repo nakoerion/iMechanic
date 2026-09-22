@@ -49,7 +49,7 @@ export function FaultCodeCard({
   return (
     <article
       className={cn(
-        "overflow-hidden rounded-card border-2 bg-surface shadow-sm",
+        "overflow-hidden rounded-card border-2 bg-surface shadow-card",
         c.border,
         className,
       )}

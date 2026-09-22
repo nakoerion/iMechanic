@@ -1,4 +1,5 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
+import { Card } from "../../components/app-shell";
 import {
   ArrowRightIcon,
   EngineIcon,
@@ -45,7 +46,7 @@ function AppHome() {
           come from the `on-chrome` roles — `text-fg` here would be dark ink on
           navy at ~1.1:1 in the light theme. The CTA keeps `bg-brand` +
           `text-on-brand`, which is already fixed in both themes. */}
-      <section className="overflow-hidden rounded-2xl border border-navy-800 bg-chrome p-6 text-on-chrome shadow-sm">
+      <section className="overflow-hidden rounded-card border border-navy-800 bg-chrome p-6 text-on-chrome shadow-card">
         <p className="label-micro text-brand">New diagnosis</p>
         <h2 className="mt-2 text-2xl font-extrabold tracking-tight">
           Start a scan
@@ -56,7 +57,9 @@ function AppHome() {
         </p>
         <Link
           to="/app/scan"
-          className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-lg bg-brand px-5 py-3 text-base font-semibold text-on-brand transition-colors hover:bg-brand-strong"
+          /* The shared primary button, so the hero CTA is the same control as
+             every other screen's — including the A7 `--shadow-key` lift. */
+          className={cn("mt-5", buttonClasses("primary", "md"))}
         >
           <ScanIcon className="h-5 w-5" />
           Go to scan
@@ -69,7 +72,7 @@ function AppHome() {
       </section>
 
       {/* Golden path reference */}
-      <section className="rounded-2xl border border-line bg-surface p-5 shadow-sm">
+      <Card>
         <h2 className="flex items-center gap-2 text-sm font-bold text-fg">
           <EngineIcon className="h-4 w-4 text-brand-strong" />
           Every session follows the same path
@@ -87,12 +90,14 @@ function AppHome() {
             </li>
           ))}
         </ol>
-      </section>
+      </Card>
 
       {/* Saving is live: every scan is persisted (S3). This card therefore
-          says what happens to a scan — it never claims the list is empty. */}
-      <section className="flex flex-col items-center rounded-2xl border border-line bg-surface px-6 py-10 text-center shadow-sm">
-        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-app-bg text-brand-fg">
+          says what happens to a scan — it never claims the list is empty.
+          A6: it is the same card material as EmptyState (the screen it
+          foreshadows), including the plate-recessed mark. */}
+      <Card className="flex flex-col items-center px-6 py-10 text-center">
+        <span className="flex h-14 w-14 items-center justify-center rounded-plate border border-line bg-surface-sunken text-brand-fg">
           <HistoryIcon className="h-7 w-7" />
         </span>
         <h2 className="mt-4 text-lg font-bold text-fg">
@@ -109,7 +114,7 @@ function AppHome() {
           <HistoryIcon className="h-4 w-4" aria-hidden />
           View history
         </Link>
-      </section>
+      </Card>
     </div>
   );
 }

@@ -166,7 +166,7 @@ export function RepairJobSection({
           {(job.state === "done" || job.state === "verified") && (
             <section
               aria-label={t.verifyHeading}
-              className="rounded-card border border-line bg-surface p-5 shadow-sm"
+              className="rounded-card border border-line bg-surface p-5 shadow-card"
             >
               <h2 className="text-sm font-bold text-fg">{t.verifyHeading}</h2>
               <p className="mt-1 text-xs leading-relaxed text-fg-subtle">
@@ -204,7 +204,7 @@ export function RepairJobSection({
               {stillPresent && stillPresent.length > 0 && (
                 <div
                   role="status"
-                  className="mt-3 rounded-card border border-line bg-surface-sunken p-4"
+                  className="mt-3 rounded-plate border border-line bg-surface-sunken p-4"
                 >
                   <p className="flex items-start gap-2 text-sm font-bold text-fg">
                     <InfoIcon
@@ -226,7 +226,7 @@ export function RepairJobSection({
       {error && (
         <p
           role="alert"
-          className="flex items-start gap-2 rounded-card border border-line bg-surface-sunken p-3 text-sm leading-relaxed text-fg-muted"
+          className="flex items-start gap-2 rounded-plate border border-line bg-surface-sunken p-3 text-sm leading-relaxed text-fg-muted"
         >
           <AlertIcon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           {error}

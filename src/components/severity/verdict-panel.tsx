@@ -25,7 +25,10 @@ import { SeverityIcon } from "../ui/severity-badge";
  *     in the `on-*` role. The rim is not `*-border` because in this palette
  *     border and solid are the same hex, so a border-coloured rim on a solid
  *     lamp would be invisible (see the `ring` field in `lib/severity.ts`);
- *   - a 1px `--color-bezel` hairline runs along the card's top edge;
+ *   - a 1px `--color-bezel` hairline runs along the card's top edge. Since A6
+ *     this comes from the `shadow-card` elevation itself (an INSET shadow, so
+ *     it hugs the anchor border exactly as the old explicit 1px div did) —
+ *     one model for every card, no per-component rim markup;
  *   - `stop_driving` — and only `stop_driving` — carries a 4px
  *     `--color-danger-solid` hazard rule across the card top. It is the one
  *     place in the app that rule may appear.
@@ -70,15 +73,12 @@ export function VerdictPanel({
       aria-label={APP_COPY.verdict.heading}
       className={cn(
         /* overflow-hidden keeps a flush top rule inside the card radius. */
-        "overflow-hidden rounded-card border-2 shadow-sm",
+        "overflow-hidden rounded-card border-2 shadow-card",
         c.border,
         c.fill,
         className,
       )}
     >
-      {/* Bezel: the 1px "backlit rim" on the plate's top edge (dark theme). */}
-      <div aria-hidden className="h-px w-full bg-bezel" />
-
       {/* Hazard rule: 4px danger-solid across the top of a stop-driving card. */}
       {hazard && <div aria-hidden className="h-1 w-full bg-danger-solid" />}
 

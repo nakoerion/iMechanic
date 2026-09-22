@@ -38,7 +38,7 @@ export function ProUpgradePrompt({
     <section
       aria-label={t.eyebrow}
       className={[
-        "rounded-card border border-line bg-surface shadow-sm",
+        "rounded-card border border-line bg-surface shadow-card",
         compact ? "p-4" : "p-5",
         className ?? "",
       ]
@@ -92,7 +92,7 @@ export function PlanUnknownNote({
   return (
     <section
       aria-live="polite"
-      className="rounded-card border border-line bg-surface-sunken p-4"
+      className="rounded-plate border border-line bg-surface-sunken p-4"
     >
       <p className="flex items-start gap-2 text-sm leading-relaxed text-fg-muted">
         {kind === "loading" ? (

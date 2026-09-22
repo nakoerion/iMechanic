@@ -182,9 +182,13 @@
   /* Technical/data blocks sit at the tighter plate radius (A1). */
   --radius-plate: 0.5rem;
 
-  /* Elevation — one model for app and marketing (A1).
-     Card: a real shadow in light, `none` in dark (there the bezel
-     hairline does the separating — `shadow-sm` was invisible on navy).
+  /* Elevation — ONE model for every app surface (A1, completed in A6).
+     `shadow-card` is not just a drop shadow: it is the whole card
+     elevation, an inset 1px `--ui-bezel` rim plus (light only) a real
+     outer shadow. Because the rim is an INSET shadow it hugs the border
+     box, so a card gets its bezel hairline without any extra markup —
+     every surface that consumes the card material is automatically
+     correct in both themes (see the raw values in `:root` / `.dark`).
      Key: the primary CTA lift, amber-tinted, identical in both themes. */
   --shadow-card: var(--ui-shadow-card);
   --shadow-key: 0 8px 24px rgb(245 158 11 / 0.2);
@@ -250,16 +254,24 @@
      tap targets; hairline is for dividers inside a data plate, bezel is
      a top rim that only reads on a dark ground (in light it is the white
      edge of a raised panel). Row/border separation uses --ui-line /
-     --ui-line-strong, exactly as the app already does. */
+     --ui-line-strong, exactly as the app already does.
+     A6 note: on the fixed navy chrome (header / tab bar / hero plate) the
+     same bezel rim measures 18.7:1 — it is a highlight there, not a
+     separator, and the chrome's own edge still comes from bg-chrome. */
   --ui-hairline: #0f172a14;
   --ui-bezel: #ffffff;
-  /* Elevation model (A1): the light theme gets a real, soft card shadow. */
-  --ui-shadow-card: 0 1px 2px rgb(15 23 42 / 0.06),
-    0 1px 3px rgb(15 23 42 / 0.05);
+  /* Elevation model (A1 raw value, completed in A6). The light theme reads
+     with the real, soft outer shadow; the inset white rim is the same
+     "backlit top edge" the dark theme uses, and on a white surface it is
+     simply invisible (1.0:1 — decorative, never a separator). */
+  --ui-shadow-card: inset 0 1px 0 var(--ui-bezel),
+    0 1px 2px rgb(15 23 42 / 0.06), 0 1px 3px rgb(15 23 42 / 0.05);
 
   --ui-brand: #fbbf24;
   --ui-brand-strong: #f59e0b;
-  --ui-brand-fg: #92400e;   /* 7.1:1 on surface, 6.5:1 on app-bg */
+  --ui-brand-fg: #92400e;   /* 7.1:1 on surface, 6.5:1 on app-bg,
+                               6.8:1 on surface-sunken (A6: the empty-state
+                               mark sits on the plate material) */
   --ui-on-brand: #0b1220;   /* 11.2:1 on brand, 8.7:1 on brand-strong */
   /* Technical metadata (A5). Carries text (the transcript legend and the
      command column of every exchange line) and the rail's 3px state ticks,
@@ -316,19 +328,24 @@
 
   /* Instrument material (A1). Decorative, non-text, measured:
        --ui-hairline #ffffff14 (8% light) on surface = 1.2:1 — below 3:1
-       --ui-bezel    #ffffff1f            on surface = 1.4:1 — below 3:1
+       --ui-bezel    #ffffff1f (12% light)          = 1.4:1 — below 3:1
+                              on chrome #0b1220     = 1.4:1 — below 3:1
      Same rule as the light theme: neither replaces --ui-line / 
      --ui-line-strong for separating interactive rows. */
   --ui-hairline: #ffffff14;
   --ui-bezel: #ffffff1f;
-  /* No card shadow on navy: it renders as an invisible smudge and made the
-     dark app flat (that was the bug). Here the bezel rim does the work, so
-     --shadow-card resolves to `none` and any `shadow-sm` usage is a no-op. */
-  --ui-shadow-card: none;
+  /* No drop shadow on navy: it renders as an invisible smudge and made the
+     dark app flat (that was the bug). The dark theme reads by bezel
+     HAIRLINE instead, so --shadow-card resolves to the inset rim alone —
+     the card material carries its own 1px lit top edge and the outer
+     elevation is deliberately nothing. That is the whole A6 model: light
+     = outer shadow, dark = rim, both from the one token. */
+  --ui-shadow-card: inset 0 1px 0 var(--ui-bezel);
 
   --ui-brand: #fbbf24;
   --ui-brand-strong: #fcd34d;
-  --ui-brand-fg: #fcd34d;   /* 12.0:1 on surface, 13.5:1 on app-bg */
+  --ui-brand-fg: #fcd34d;   /* 12.0:1 on surface, 13.5:1 on app-bg,
+                               13.0:1 on surface-sunken (A6, as above) */
   --ui-on-brand: #0b1220;   /* 11.2:1 on brand, 13.0:1 on brand-strong */
   /* Technical metadata (A5) — the dark-theme tone of the same cool hue.
      Measured on the same three grounds:

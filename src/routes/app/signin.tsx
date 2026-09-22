@@ -39,7 +39,7 @@ function SignInPage() {
           title={APP_COPY.signIn.sentTitle}
           description={APP_COPY.signIn.sentDescription}
         />
-        <section className="flex flex-col items-center rounded-2xl border border-line bg-surface px-6 py-10 text-center shadow-sm">
+        <section className="flex flex-col items-center rounded-card border border-line bg-surface px-6 py-10 text-center shadow-card">
           <p className="text-xs font-semibold uppercase tracking-wider text-brand-fg">
             {APP_COPY.signIn.sentEyebrow}
           </p>
@@ -60,7 +60,7 @@ function SignInPage() {
       <form
         onSubmit={onSubmit}
         noValidate
-        className="rounded-2xl border border-line bg-surface p-5 shadow-sm"
+        className="rounded-card border border-line bg-surface p-5 shadow-card"
       >
         <FormField label={APP_COPY.signIn.emailLabel} error={error} required>
           {(a11y) => (
