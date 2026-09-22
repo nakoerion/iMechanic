@@ -239,7 +239,13 @@ function serialTransport(port: SerialPortLike, name: string): LineTransport {
     name,
     async writeLine(line: string) {
       if (!port.writable) throw new ObdError("Could not write to the serial port.");
-      await ensurePump();
+      // Start the shared reader pump and keep going. `ensurePump()` only
+      // settles when the port's readable stream ends, so awaiting it would
+      // block *every* command forever — the adapter would never receive one
+      // byte. The pump runs for the life of the port; a failure surfaces
+      // through `pumpFailed`, which `readUntilPrompt()` reports instead of
+      // waiting out the timeout.
+      void ensurePump().catch(() => undefined);
       const writer = port.writable.getWriter();
       try {
         await writer.write(encoder.encode(`${line}\r`));
@@ -250,6 +256,12 @@ function serialTransport(port: SerialPortLike, name: string): LineTransport {
     },
     readUntilPrompt(timeoutMs = READ_TIMEOUT_MS) {
       return new Promise<string>((resolve, reject) => {
+        // A pump that is already dead fails fast and honestly, rather than
+        // sitting out the full timeout and blaming the adapter.
+        if (pumpFailed) {
+          reject(pumpFailed);
+          return;
+        }
         const timer = setTimeout(() => {
           const i = waiters.findIndex((w) => w.resolve === resolve);
           if (i >= 0) waiters.splice(i, 1);

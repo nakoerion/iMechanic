@@ -137,6 +137,10 @@ describe("LiveElmDriver transcript observer (A5)", () => {
 
     await driver.connect();
     const result = await driver.readCodes();
+    /* Read the session log while the adapter is still attached — exactly when
+       the scan screen reads it. After `disconnect()` the driver has released
+       the transport and no longer knows which adapter it was talking to. */
+    const log = driver.getTranscript();
     await driver.disconnect();
     off();
 
@@ -150,7 +154,6 @@ describe("LiveElmDriver transcript observer (A5)", () => {
 
     // R3 is untouched: the persisted transcript is the driver's own full log,
     // same content, distinct objects (the UI holds its own copies).
-    const log = driver.getTranscript();
     expect(log.transport).toBe("serial");
     expect(log.adapter).toBe("USB adapter");
     expect(log.entries.map((e) => e.command)).toEqual([

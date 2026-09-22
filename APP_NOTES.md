@@ -1266,19 +1266,48 @@ empty reply.
 unused-symbol warning). A real BLE characteristic therefore never notifies, so
 `readUntilPrompt` always hits its 8s timeout and **a Web Bluetooth scan can never get past
 the first `ATZ`** — it fails with "The adapter stopped answering mid-scan." The Web Serial
-and native-bridge transports are unaffected (the serial reader pump is wired). Not touched
-because A5 must not change the driver's behaviour for other callers; the one-line fix
-(register `onNotify` right after `startNotifications()`) belongs in its own slice with its
-own verification.
+transport is untouched here (fix belongs in its own slice with its own verification), but
+the Web Serial half of that claim was **wrong** and A5's own test pass is what disproved
+it — do not repeat it:
 
-### Verification
+- `serialTransport`'s `writeLine()` **awaited** `ensurePump()`, and `ensurePump()` only
+  settles when the port's readable stream ends (`for (;;) await reader.read()`). The first
+  command therefore never reached the wire: `ATZ` was never written, `readUntilPrompt()`
+  was never reached, and a USB-serial scan hung rather than failing. Reproduced with a
+  standalone fake-port script before touching anything (`writes=[]`, watchdog at 6s).
+- **Fixed in A5** (3 lines, same file): `writeLine()` starts the pump in the background
+  (`void ensurePump().catch(() => undefined)`) instead of awaiting it, and
+  `readUntilPrompt()` rejects immediately with `pumpFailed` when the pump is already dead
+  rather than sitting out the 8s timeout. The shared-pump design is unchanged — it now
+  actually runs. This is the only production change A5 needed; the intent was always a
+  background pump (the comment above it says so), so no `LineTransport` contract moved.
+- The defect dated from S3 (#5), i.e. **it predates the redesign and was never exercised**
+  because nothing drove an end-to-end serial exchange until A5's test did.
 
-- `bun run build` clean; `bun run test` → **198 passed | 16 skipped** (185 + 13 new; the 3 DB
-  suites still abort on the missing `TEST_DATABASE_URL`, exit 1 by design).
-- `tsc --noEmit` → 0 errors.
-- Browser, signed in, at 390×844 and desktop (1280×800), light **and** dark: the four-state
-  rail renders on the demo scan (Connect → Read → Interpret on a demo run), the transcript
-  block does **not** render on demo/manual (no adapter, so nothing to transcribe), zero
-  console errors. Real hardware is not available here — the live-only transcript path is
-  covered by the injected-entry unit tests above instead.
+### Verification (all figures measured, 2026-09-22, branch `a5-scan-ignition-sequence`)
+
+- `node --max-old-space-size=1200 node_modules/typescript/bin/tsc --noEmit` → **0 errors**
+  (`TSC_EXIT=0`).
+- `bun run build` → clean (`BUILD_EXIT=0`); client + SSR environments built, scan chunk
+  emitted.
+- `bun run test` → **198 passed | 16 skipped (214)** across 14 files. `tests/scan-ignition.test.ts`
+  → **13/13 passed** in 1.23s. 11 files pass; the 3 DB-backed suites
+  (`migrate.test.ts`, `schema.test.ts`, `obd.test.ts`'s isolated-DB block) abort with
+  "TEST_DATABASE_URL is not set", so the script exits 1 **by design** — judge it by the
+  passed/skipped counts.
+- Browser, signed in with a throwaway session, against the **built** output on a spare port,
+  at 390×844 **and** 1280×800, light **and** dark (4 passes, all identical). Rail states were
+  recorded from the live DOM with a `MutationObserver` during the demo scan, not eyeballed:
+  `no rail → Connect current → Connect✓ Initialise✓ Read✓ + Interpret current → no rail`.
+  The status line read "Reading demo codes…" throughout and the transcript group
+  (`[aria-label="Adapter link"]`) was **absent in every recorded state**, and `0 rails /
+  0 transcripts` once the scan settled. The manual path (`P0301` → "Save as scan") recorded
+  **`rail: null` in all three states**, with the status line alone showing "Saving…".
+  `errors` and `console` were **empty after every pass** (zero console errors; the built
+  output has no HMR websocket noise). Screenshots: `/tmp/a5-mobile-demo-rail.png` (rail at
+  Interpret, all four ticks) plus `a5-{mobile-dark,desktop-light,desktop-dark}-{demo,manual}.png`.
+- Cleanup: the throwaway user (and its cascaded session/scans) was deleted; 0 orphan rows.
+- Real hardware is not available here, so the live-only transcript content stays covered by
+  the injected-entry unit tests; the serial transport itself is now genuinely exercised
+  end-to-end by the A5 tests (that is what exposed the pump bug above).
 
