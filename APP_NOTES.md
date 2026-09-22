@@ -1399,7 +1399,15 @@ fill, but the *border* is under the 3:1 non-text threshold — worth a separate 
   note background `rgb(53,15,16)` = `--ui-danger-fill`, and the panel's computed
   `box-shadow` = `inset rgba(255,255,255,0.12) 0 1px 0` — i.e. the dark elevation is the bezel
   rim, exactly as designed. Screenshot `/tmp/shot-dark-repair.png`.
-- **Still to verify before merge** (the browser tooling lost the remaining passes when the
-  session ran out of budget): light theme and the 1280×800 desktop pass on `/app` and
-  `/app/vehicles`, and an explicit `console`/`errors` count for this branch. The only console
-  noise seen in the dark pass came from the page load; nothing was recorded as an error.
+- Other passes on the built output, same throwaway session: **light, 390×844, `/app`** —
+  `documentElement.className` empty (light), `h1` = "Today", and the first card's computed
+  `box-shadow` = `rgb(255,255,255) 0 1px 0 inset, rgba(15,23,42,0.06) 0 1px 2px,
+  rgba(15,23,42,0.05) 0 1px 3px` — i.e. the white inset rim plus BOTH light outer shadows, so
+  the two themes really do read differently off the same token. Screenshots:
+  `/tmp/shot-light-home-390.png`, `/tmp/shot-light-vehicles-desktop.png` (1280×800),
+  `/tmp/shot-dark-vehicles-desktop.png` (1280×800).
+- `agent-browser errors` and `agent-browser console` were **empty on every pass** (zero
+  console errors, so no hydration mismatch — React would report one as a console error).
+- Not independently re-checked here: the desktop **dark** `/app` home (the same components are
+  covered by the dark repair panel and the dark vehicles pass), and no screen was exercised
+  through a real OBD2/Pro flow — this slice is material/markup only.
