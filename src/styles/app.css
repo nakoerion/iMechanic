@@ -140,6 +140,14 @@
   --color-brand-fg: var(--ui-brand-fg);
   --color-on-brand: var(--ui-on-brand);
 
+  /* Technical metadata (A5) — the live adapter/connection state, the ELM327
+     transcript legend, PID-style labels. This is the ONE new hue the redesign
+     adds: a cool telemetry accent, so technical chrome never has to borrow a
+     severity colour. It is never a verdict, never a CTA and never a severity
+     signal; the four severity roles above stay absolutely reserved. Ratios
+     are measured in the role block below. */
+  --color-tech: var(--ui-tech);
+
   /* Severity — drive on (ok) */
   --color-ok-fill: var(--ui-ok-fill);
   --color-ok-border: var(--ui-ok-border);
@@ -253,6 +261,15 @@
   --ui-brand-strong: #f59e0b;
   --ui-brand-fg: #92400e;   /* 7.1:1 on surface, 6.5:1 on app-bg */
   --ui-on-brand: #0b1220;   /* 11.2:1 on brand, 8.7:1 on brand-strong */
+  /* Technical metadata (A5). Carries text (the transcript legend and the
+     command column of every exchange line) and the rail's 3px state ticks,
+     so it needs both thresholds. Measured against the ground it is painted
+     on — the ignition-sequence panel is `surface-sunken`:
+       --ui-tech #155e75 on surface-sunken = 6.95:1, on surface = 7.27:1,
+                                              on app-bg      = 6.63:1
+     One hue, two tones: cool, and deliberately not emerald/orange/red/amber,
+     so it can never read as a verdict. */
+  --ui-tech: #155e75;
 
   --ui-ok-fill: #ecfdf5;
   --ui-ok-border: #047857;  /* 5.2:1 on ok-fill */
@@ -313,6 +330,11 @@
   --ui-brand-strong: #fcd34d;
   --ui-brand-fg: #fcd34d;   /* 12.0:1 on surface, 13.5:1 on app-bg */
   --ui-on-brand: #0b1220;   /* 11.2:1 on brand, 13.0:1 on brand-strong */
+  /* Technical metadata (A5) — the dark-theme tone of the same cool hue.
+     Measured on the same three grounds:
+       --ui-tech #7dd3fc on surface-sunken = 11.23:1, on surface = 10.42:1,
+                                              on app-bg      = 11.66:1  */
+  --ui-tech: #7dd3fc;
 
   --ui-ok-fill: #06251c;
   --ui-ok-border: #34d399;  /* 8.5:1 on ok-fill */
@@ -361,6 +383,7 @@
   --color-brand-strong: var(--ui-brand-strong);
   --color-brand-fg: var(--ui-brand-fg);
   --color-on-brand: var(--ui-on-brand);
+  --color-tech: var(--ui-tech);
   --color-ok-fill: var(--ui-ok-fill);
   --color-ok-border: var(--ui-ok-border);
   --color-ok-fg: var(--ui-ok-fg);
