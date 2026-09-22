@@ -88,7 +88,7 @@ export function AiRootCausePanel({
     return (
       <section
         aria-label={t.heading}
-        className="rounded-card border border-line bg-surface p-5 shadow-sm"
+        className="rounded-card border border-line bg-surface p-5 shadow-card"
       >
         <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-fg-subtle">
           <SparkIcon className="h-3.5 w-3.5" aria-hidden />
@@ -139,7 +139,7 @@ export function AiRootCausePanel({
     return (
       <section
         aria-label={t.unavailableHeading}
-        className="rounded-card border border-line bg-surface p-5 shadow-sm"
+        className="rounded-card border border-line bg-surface p-5 shadow-card"
       >
         <p className="flex items-start gap-1.5 text-sm font-semibold text-fg">
           <InfoIcon className="mt-px h-4 w-4 shrink-0" aria-hidden />
@@ -163,7 +163,7 @@ export function AiRootCausePanel({
     return (
       <section
         aria-label={t.unavailableHeading}
-        className="rounded-card border border-line bg-surface p-5 shadow-sm"
+        className="rounded-card border border-line bg-surface p-5 shadow-card"
       >
         <p className="flex items-start gap-1.5 text-sm font-semibold text-fg">
           <InfoIcon className="mt-px h-4 w-4 shrink-0" aria-hidden />
@@ -184,7 +184,7 @@ export function AiRootCausePanel({
   return (
     <section
       aria-label={t.heading}
-      className="rounded-card border border-line bg-surface p-5 shadow-sm"
+      className="rounded-card border border-line bg-surface p-5 shadow-card"
     >
       <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-fg-subtle">
         <SparkIcon className="h-3.5 w-3.5" aria-hidden />

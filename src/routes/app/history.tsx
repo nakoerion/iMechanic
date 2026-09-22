@@ -98,7 +98,7 @@ function AppHistory() {
 
       {state.kind === "loading" && (
         <p
-          className="flex items-center justify-center gap-2 rounded-card border border-line bg-surface px-6 py-10 text-sm font-medium text-fg-muted"
+          className="flex items-center justify-center gap-2 rounded-card border border-line bg-surface px-6 py-10 text-sm font-medium text-fg-muted shadow-card"
           role="status"
         >
           <SpinnerIcon className="h-5 w-5 animate-spin" aria-hidden />
@@ -107,8 +107,8 @@ function AppHistory() {
       )}
 
       {state.kind === "error" && (
-        <section className="flex flex-col items-center rounded-card border border-line bg-surface px-6 py-10 text-center shadow-sm">
-          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-neutral-fill text-danger-fg">
+        <section className="flex flex-col items-center rounded-card border border-line bg-surface px-6 py-10 text-center shadow-card">
+          <span className="flex h-12 w-12 items-center justify-center rounded-control bg-neutral-fill text-danger-fg">
             <AlertIcon className="h-6 w-6" />
           </span>
           <h2 className="mt-4 text-lg font-bold text-fg">{h.errorTitle}</h2>
@@ -171,7 +171,7 @@ function ScanRow({ scan }: { scan: ScanSummary }) {
   const hidden = scan.codeCount - scan.codes.length;
 
   return (
-    <li className="rounded-card border border-line bg-surface p-4 shadow-sm">
+    <li className="rounded-card border border-line bg-surface p-4 shadow-card">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-bold text-fg">

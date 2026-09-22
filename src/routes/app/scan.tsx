@@ -373,7 +373,10 @@ function AppScan() {
           report) and the transcript is absent unless the adapter actually said
           something, so neither can ever be decorative filler. */}
       {phase.kind === "working" && (
-        <div className="space-y-2.5 rounded-card border border-line bg-surface-sunken px-3 py-3">
+        /* A technical-block material (A6): the ignition rail + adapter
+           transcript is machine data, so it sits on a PLATE — the tighter
+           radius and denser interior of `--radius-plate` — not on a card. */
+        <div className="space-y-2.5 rounded-plate border border-line bg-surface-sunken px-3 py-3">
           {phase.step && <PhaseRail activeStep={phase.step} />}
           <p
             role="status"
@@ -477,7 +480,7 @@ function AppScan() {
               {t.liveDescription}
             </p>
             {liveUnavailable ? (
-              <div className="mt-3 rounded-card border border-line bg-surface-sunken p-4">
+              <div className="mt-3 rounded-plate border border-line bg-surface-sunken p-4">
                 <p className="flex items-start gap-2 text-sm font-semibold text-fg">
                   <InfoIcon className="mt-0.5 h-4 w-4 shrink-0 text-brand-strong" />
                   {t.liveUnavailableTitle}
@@ -801,7 +804,7 @@ function ScanResult({
             source="rules"
             codeCount={scan.codes.length}
           />
-          <div className="mt-2 rounded-card border border-line bg-surface p-4">
+          <div className="mt-2 rounded-card border border-line bg-surface p-4 shadow-card">
             <p className="text-xs font-semibold uppercase tracking-wider text-fg-subtle">
               {APP_COPY.faultCode.diagnosisReasonsLabel}
             </p>
@@ -818,7 +821,7 @@ function ScanResult({
           </div>
         </div>
       ) : (
-        <p className="rounded-card border border-line bg-surface p-4 text-xs leading-relaxed text-fg-subtle">
+        <p className="rounded-card border border-line bg-surface p-4 text-xs leading-relaxed text-fg-subtle shadow-card">
           {APP_COPY.faultCode.verdictMismatchNote}
         </p>
       )}
@@ -864,7 +867,7 @@ function ScanResult({
         </ProGate>
       )}
 
-      <section className="rounded-card border border-line bg-surface p-5 shadow-sm">
+      <section className="rounded-card border border-line bg-surface p-5 shadow-card">
         <h2 className="text-sm font-bold text-fg">{t.resultHeading}</h2>
         {/* Source badge: demo data is never presented as real. */}
         <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-neutral-fill px-3 py-1 text-xs font-semibold text-neutral-fg">
@@ -907,7 +910,7 @@ function ScanResult({
                   ) : (
                     <li
                       key={c.id}
-                      className="rounded-card border border-line bg-surface-sunken p-3"
+                      className="rounded-plate border border-line bg-surface-sunken p-3"
                     >
                       <div className="flex items-baseline justify-between gap-2">
                         <span className="font-mono text-base font-bold tracking-wider text-fg">
@@ -927,7 +930,7 @@ function ScanResult({
               : scan.codes.map((c) => (
                   <li
                     key={c.id}
-                    className="rounded-card border border-line bg-surface-sunken p-3"
+                    className="rounded-plate border border-line bg-surface-sunken p-3"
                   >
                     <div className="flex items-baseline justify-between gap-2">
                       <span className="font-mono text-base font-bold tracking-wider text-fg">
@@ -947,7 +950,7 @@ function ScanResult({
       </section>
 
       {/* Clear codes — free forever. No lock, no badge, no dimming. */}
-      <section className="rounded-card border border-line bg-surface p-5 shadow-sm">
+      <section className="rounded-card border border-line bg-surface p-5 shadow-card">
         <h2 className="text-sm font-bold text-fg">{t.clearButton}</h2>
         <p className="mt-1 text-xs leading-relaxed text-fg-subtle">
           {t.clearConfirm}

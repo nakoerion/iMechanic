@@ -85,7 +85,7 @@ function NotFound() {
       <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
         <a
           href="/app"
-          className="rounded-control bg-navy-950 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-navy-900"
+          className="rounded-control bg-chrome px-5 py-3 text-sm font-semibold text-on-chrome transition-colors hover:bg-navy-900"
         >
           Open the app
         </a>

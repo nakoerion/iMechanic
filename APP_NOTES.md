@@ -1311,3 +1311,103 @@ it — do not repeat it:
   the injected-entry unit tests; the serial transport itself is now genuinely exercised
   end-to-end by the A5 tests (that is what exposed the pump bug above).
 
+
+### A6 — dark-theme elevation pass (branch `a6-a7-elevation-guided-repair`)
+
+**One elevation model, and it lives in the token.** `--ui-shadow-card` is no longer just a
+drop shadow: it is the whole card elevation — an INSET `0 1px 0 var(--ui-bezel)` rim plus, in
+the light theme only, the existing soft outer shadow. Light reads by the shadow, dark reads by
+the 1px lit top edge (the old dark app was flat because `shadow-sm` renders as nothing on
+navy). Because the rim is an *inset* shadow it hugs the border box, so it needs no markup and
+sits exactly where the explicit 1px `bg-bezel` div used to in `VerdictPanel` — that div is gone
+and the panel now uses `shadow-card` like every other card. No hex changed; the bezel/hairline
+ratios in `app.css` were re-measured with the `audit-token-contrast` method and are unchanged
+(light 1.0:1 on surface, 18.7:1 on chrome; dark 1.4:1 on surface, 1.4:1 on chrome — all
+recorded in the token comments).
+
+**Sweep.** Every bare `shadow-sm` on an app surface became the card material
+(`shadow-card`), so each standalone block on a screen has the same elevation and dark
+separation: `empty-state.tsx`, `routes/app/index.tsx` (hero chrome plate, golden path, saved-history
+card), `history.tsx` (rows, loading, error), `vehicles.tsx` (loading, error, notice), `scan.tsx`
+(verdict-reasons block, result, clear-codes, mismatch note), `signin.tsx`, `account.tsx`
+(signed-out card + both checkout notes), `ai-root-cause-panel.tsx`, `cost-decision-card.tsx`,
+`repair-job-section.tsx`, `guided-repair-panel.tsx`, `pro-prompt.tsx`, `pro-plan.tsx`. Blocks
+NESTED inside a card stay flat (border only) — elevation does not stack. Anything on the sunken
+ground is now a plate and uses `--radius-plate`. `border-navy-800` on the tab bar was replaced by
+a bezel rim, and `text-slate-300` → `text-on-chrome-muted` (identical hex, role token), so the
+chrome no longer carries a raw palette class. The two other page-level chrome surfaces
+(`__root.tsx` 404 CTA, `routes/app/index.tsx` hero CTA) now use `bg-chrome`/`text-on-chrome` and
+the shared `buttonClasses` instead of ad-hoc amber classes.
+
+**Dark-theme bug found and fixed:** `ui/theme-control.tsx` marked the selected theme with raw
+`bg-navy-950 text-white` on a `--ui-surface-sunken` container, which in the dark theme is the
+SAME `#0b1220` — the selected option was invisible. It now uses the app's established
+selected-chip treatment (`bg-brand` + `text-on-brand`); still a real radiogroup, so the state was
+never colour-only.
+
+**Contrast (measured, `audit-token-contrast` method, both themes).** No token hex changed and
+every pre-existing ratio reproduced exactly (`fg/app-bg` 16.30:1, `fg-muted/app-bg` 6.92:1,
+`fg-subtle/app-bg` 4.34:1 — the recorded sub-threshold pair, `ok-fg/ok-fill` 9.23:1,
+`warn-fg/warn-fill` 8.83:1, `danger-fg/danger-fill` 9.16:1, `on-chrome/chrome` 18.72:1,
+`on-chrome-muted/chrome` 12.61:1). Two NEW pairs were created by the sweep and are now recorded
+in `app.css`: `--ui-brand-fg` on `--ui-surface-sunken` (the empty-state mark's new ground) =
+**6.78:1 light / 12.98:1 dark** — both clear AA. Not changed here: `line-strong` on `surface`
+is 1.48:1 light / 2.02:1 dark (pre-existing; a secondary button still reads by its label and
+fill, but the *border* is under the 3:1 non-text threshold — worth a separate decision).
+
+### A7 — guided repair + vehicles polish
+
+- `components/repair/guided-repair-panel.tsx`: steps now hang off a **vertical hairline rail**
+  with **numbered discs** (the 01…07 service-procedure language), the whole row is the label —
+  a **28px checkbox inside a ≥48px row** — the tools are **plate chips** (mono value, hairline
+  edge), and the safety note sits **inline above the first step** in the `danger` fill. These
+  notes are real hazards (fuel vapour, a hot exhaust, cold-engine/battery), so danger fill is
+  the honest choice, and it gained nothing that could read as promotion. The panel kept its
+  `aria-label`, so it uses `CARD_MATERIAL.card` on a `<section>` rather than `<Card>` (which
+  takes no extra props). The list is still a real `<ol>` and each checkbox repeats "Step N: …".
+- `components/ui/button.tsx`: primary now carries **`--shadow-key`** (the app/marketing-shared
+  CTA lift) and drops it plus travels 1px on `:active`; added a **`toggle` variant** whose
+  latched state is driven by `aria-pressed` (amber fill), so a hardware-style on/off control
+  reads as physically switched without any glow. Sizes unchanged and still ≥40px (sm 40, md 48,
+  lg 56). The toggle is showcased in `/_gallery`'s Buttons section.
+- `routes/app/vehicles.tsx`: the rows were already A3 plates; only the loading/error/notice
+  surfaces and the error icon tile touched (role token + `rounded-control`), nothing in the row
+  material.
+- Guardrails honoured: severity triad untouched (same hexes, glyphs, 2px anchor border, no
+  shared shape), no lock/blur/dim/opacity added to `VerdictPanel` / `FaultCodeCard` /
+  clear-codes, the workshop safety note is unchanged and gained nothing, no new copy facts or
+  prices, **no free-vs-Pro gating touched**, and no decorative motion was added (nothing new to
+  guard behind `prefers-reduced-motion`).
+
+### Verification (measured, branch `a6-a7-elevation-guided-repair`)
+
+- `node --max-old-space-size=1200 node_modules/typescript/bin/tsc --noEmit` → **0 errors**
+  (`TSC_EXIT=0`).
+- `bun run build` → clean (`BUILD_EXIT=0`), client + SSR.
+- `bun run test` → **198 passed | 16 skipped (214)** across 14 files; the 3 DB suites
+  (`migrate`, `schema`, `obd`'s isolated block) abort on the missing `TEST_DATABASE_URL`, so the
+  script exits 1 by design (`TEST_EXIT=1`).
+- Emitted CSS checked in `dist/client/assets/app-*.css`: `.shadow-card` composes
+  `--tw-shadow: var(--ui-shadow-card)` with the inset/ring slots, `.shadow-key`,
+  `.accent-brand-strong`, the `[aria-pressed=true]` variants and `.active\:translate-y-px`
+  all generate; `.p-5` is emitted before `.px-6`/`.py-12`, so the axis overrides win (the
+  empty-state/card paddings are intact).
+- Browser, signed in with a throwaway session, against the **built** output on a spare port
+  (the managed dev server on :3000 was not answering), **390×844, dark**: the guided-repair
+  panel measured from the live DOM — 5 checkboxes at **28px** each, row heights 257–348px
+  (≥48px), **4 rail hairlines** for 5 steps, 24px numbered discs, tool chip on a plate, safety
+  note background `rgb(53,15,16)` = `--ui-danger-fill`, and the panel's computed
+  `box-shadow` = `inset rgba(255,255,255,0.12) 0 1px 0` — i.e. the dark elevation is the bezel
+  rim, exactly as designed. Screenshot `/tmp/shot-dark-repair.png`.
+- Other passes on the built output, same throwaway session: **light, 390×844, `/app`** —
+  `documentElement.className` empty (light), `h1` = "Today", and the first card's computed
+  `box-shadow` = `rgb(255,255,255) 0 1px 0 inset, rgba(15,23,42,0.06) 0 1px 2px,
+  rgba(15,23,42,0.05) 0 1px 3px` — i.e. the white inset rim plus BOTH light outer shadows, so
+  the two themes really do read differently off the same token. Screenshots:
+  `/tmp/shot-light-home-390.png`, `/tmp/shot-light-vehicles-desktop.png` (1280×800),
+  `/tmp/shot-dark-vehicles-desktop.png` (1280×800).
+- `agent-browser errors` and `agent-browser console` were **empty on every pass** (zero
+  console errors, so no hydration mismatch — React would report one as a console error).
+- Not independently re-checked here: the desktop **dark** `/app` home (the same components are
+  covered by the dark repair panel and the dark vehicles pass), and no screen was exercised
+  through a real OBD2/Pro flow — this slice is material/markup only.

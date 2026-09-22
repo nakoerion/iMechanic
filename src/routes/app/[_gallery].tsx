@@ -209,6 +209,30 @@ function MaterialsShowcase() {
         </Card>
       </div>
 
+      {/* A6 elevation: review the card in the light theme here and again in
+          the dark pane below — light must read by the outer shadow, dark by
+          the 1px bezel rim. A plate carries no lift. */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Card>
+          <p className="label-micro text-fg-subtle">Elevation — card (A6)</p>
+          <p className="mt-1 text-sm leading-relaxed text-fg-muted">
+            <span className="font-mono text-xs">--shadow-card</span> is the
+            whole elevation: an inset 1px{" "}
+            <span className="font-mono text-xs">--color-bezel</span> rim on the
+            top edge plus the soft outer shadow in the light theme.
+          </p>
+        </Card>
+        <div className="flex flex-col gap-2">
+          <div className="rounded-plate border border-line bg-surface-sunken p-3">
+            <p className="label-micro text-fg-subtle">Plate — no lift</p>
+            <p className="mt-1 font-mono text-xs text-fg-muted">
+              border-line + bg-surface-sunken
+            </p>
+          </div>
+          <Button className="w-full">Primary — --shadow-key</Button>
+        </div>
+      </div>
+
       <CostDecisionCard
         family={plain.family}
         currency={plain.currency}
@@ -264,7 +288,7 @@ function Gallery() {
 
       <Section
         title="Materials"
-        note="A3 — card (guidance) vs plate (machine data), and every restyle that uses a plate"
+        note="A3/A6/A7 — card vs plate, the one elevation model, and every restyle that uses a plate (guided repair in A7, shown below)"
       >
         <MaterialsShowcase />
       </Section>
@@ -291,6 +315,16 @@ function Gallery() {
             <Button disabled>Disabled</Button>
             <Button variant="secondary" disabled>
               Disabled
+            </Button>
+          </div>
+          {/* A7 toggle: a latched hardware-style control. aria-pressed carries
+              the state, so it is never colour-only. */}
+          <div className="flex flex-wrap gap-2">
+            <Button variant="toggle" aria-pressed>
+              Pressed
+            </Button>
+            <Button variant="toggle" aria-pressed={false}>
+              Released
             </Button>
           </div>
           <Button fullWidth leadingIcon={<ScanIcon className="h-5 w-5" />} trailingIcon={<ArrowRightIcon className="h-4 w-4" />}>

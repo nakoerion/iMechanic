@@ -81,7 +81,7 @@ export function CostDecisionCard({
   return (
     <section
       aria-label={t.decideHeading}
-      className="rounded-card border border-line bg-surface p-5 shadow-sm"
+      className="rounded-card border border-line bg-surface p-5 shadow-card"
     >
       <h2 className="text-sm font-bold text-fg">{t.decideHeading}</h2>
       <p className="mt-1 text-xs leading-relaxed text-fg-subtle">

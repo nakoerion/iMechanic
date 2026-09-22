@@ -60,9 +60,22 @@ function BrandMark({ className }: { className?: string }) {
 /* AppHeader                                                           */
 /* ------------------------------------------------------------------ */
 
+/** The 1px "backlit rim" of the A6 elevation model, as a real element.
+ *
+ *  `--shadow-card` carries its own inset rim, so a card needs no markup for
+ *  it. The chrome surfaces (header, tab bar) do not use `shadow-card` — they
+ *  are a fixed navy ground, not an elevated panel — so their rim is drawn
+ *  explicitly. Decorative and non-text (see the measured ratios on
+ *  `--ui-bezel` in app.css): never the only thing separating two rows. */
+export function BezelRim({ className }: { className?: string }) {
+  return (
+    <div aria-hidden className={cn("h-px w-full bg-bezel", className)} />
+  );
+}
+
 export function AppHeader({ actions }: { actions?: ReactNode }) {
   return (
-    <header className="sticky top-0 z-40 bg-navy-950 pt-safe text-white">
+    <header className="sticky top-0 z-40 bg-chrome pt-safe text-on-chrome">
       <div className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between gap-3 px-4">
         <Link
           to="/app"
@@ -70,12 +83,14 @@ export function AppHeader({ actions }: { actions?: ReactNode }) {
           className="flex min-h-11 items-center gap-2 rounded-control pr-2"
         >
           <BrandMark />
-          <span className="text-lg font-bold tracking-tight text-white">
+          <span className="text-lg font-bold tracking-tight text-on-chrome">
             {APP_COPY.brand.name}
           </span>
         </Link>
         {actions && <div className="flex items-center gap-1">{actions}</div>}
       </div>
+      {/* The header's lit bottom edge (A6). Reads on navy in both themes. */}
+      <BezelRim />
     </header>
   );
 }
@@ -87,25 +102,34 @@ export function AppHeader({ actions }: { actions?: ReactNode }) {
 const TAB_BASE =
   "relative flex min-h-14 flex-col items-center justify-center gap-1 text-[11px] font-semibold";
 
+/* The inactive tab colour. `--ui-on-chrome-muted` is #cbd5e1 in BOTH themes,
+   i.e. exactly the `slate-300` it replaces — but as a role token, so it can
+   never drift out of step with the chrome it is painted on (12.6:1 on the
+   navy ground). A6 removed the last raw palette class from the chrome. */
+const ON_CHROME_MUTED = "text-on-chrome-muted";
+
 export function BottomTabBar() {
   return (
     <nav
       aria-label={APP_COPY.nav.label}
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-navy-800 bg-navy-950 pb-safe lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 bg-chrome pb-safe lg:hidden"
     >
+      {/* Tab bar stays navy in both themes (brand anchor) — its separation
+          from the page is the bezel rim (A6), not a raw navy border. */}
+      <BezelRim />
       <ul className="mx-auto grid w-full max-w-lg grid-cols-4">
         {NAV_ITEMS.map((item) => (
           <li key={item.to} className="contents">
             <Link
               to={item.to}
               activeOptions={{ exact: item.exact }}
-              className={cn(TAB_BASE, "text-slate-300")}
+              className={cn(TAB_BASE, ON_CHROME_MUTED)}
               /* aria-current: active state must not be colour-only (D13). */
               activeProps={{
                 className: cn(TAB_BASE, "text-brand"),
                 "aria-current": "page",
               }}
-              inactiveProps={{ className: cn(TAB_BASE, "text-slate-300") }}
+              inactiveProps={{ className: cn(TAB_BASE, ON_CHROME_MUTED) }}
             >
               {({ isActive }) => (
                 <>
@@ -241,7 +265,7 @@ export function StickyActionBar({
   note?: string;
 }) {
   return (
-    <div className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 -mx-4 mt-6 border-t border-line bg-surface/95 px-4 pt-3 pb-3 backdrop-blur lg:bottom-0">
+    <div className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 -mx-4 mt-6 border-t border-line bg-surface/95 px-4 pt-3 pb-3 shadow-card backdrop-blur lg:bottom-0">
       {children}
       {note && (
         <p className="mt-2 text-center text-xs leading-snug text-fg-subtle">{note}</p>
@@ -251,7 +275,7 @@ export function StickyActionBar({
 }
 
 /**
- * Two materials, not one (A3).
+ * Two materials, not one (A3), and one elevation model (A6).
  *
  *  - `card`  — human guidance: advice, verdicts, explanations, forms.
  *  - `plate` — machine data: vehicle details, code metadata, money bands,
@@ -260,18 +284,27 @@ export function StickyActionBar({
  *              block reads as an instrument panel and an advice block reads
  *              as something written for a person.
  *
+ * `shadow-card` is the whole elevation, not a drop shadow: it carries the
+ * inset 1px `--ui-bezel` rim as well as the light theme's outer shadow, so a
+ * card is automatically correct in BOTH themes with no extra markup — light
+ * reads by shadow, dark by the lit top edge (the old dark app was flat
+ * because `shadow-sm` is invisible on navy). **Every standalone surface on a
+ * screen consumes this material** via `Card` or `CARD_MATERIAL`; a block
+ * nested inside a card stays flat (`border border-line` only), because
+ * elevation does not stack.
+ *
  * Both take an edge from `--color-line`, not `--color-hairline`: the hairline
  * is 8% ink/light and measures ~1.2:1, so as an OUTER edge it simply
  * disappears. Hairline is for dividers *inside* a plate (see the token
  * comment in `app.css`), which is how the restyles below use it.
  *
- * The material is a token swap only — no extra markup, no colour, no lift on
- * a plate. Nothing here may be blurred, dimmed or locked: free content stays
- * legible on either material.
+ * The material is a token swap only — no colour, and plates carry no lift.
+ * Nothing here may be blurred, dimmed or locked: free content stays legible
+ * on either material.
  */
 export type CardVariant = "card" | "plate";
 
-const CARD_MATERIAL: Record<CardVariant, string> = {
+export const CARD_MATERIAL: Record<CardVariant, string> = {
   card: "rounded-card border border-line bg-surface p-5 shadow-card",
   plate: "rounded-plate border border-line bg-surface-sunken p-3",
 };

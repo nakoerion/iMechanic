@@ -2,9 +2,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Card, ScreenHeader } from "../../components/app-shell";
 import { CheckIcon, InfoIcon } from "../../components/icons";
-import { Button } from "../../components/ui/button";
+import { Button, buttonClasses } from "../../components/ui/button";
 import { ThemeControl } from "../../components/ui/theme-control";
 import { FreePlanCard, ProStatusCard } from "../../components/pro/pro-plan";
+import { cn } from "../../lib/cn";
 import { APP_COPY } from "../../lib/copy";
 import { useEntitlement, type EntitlementHandle } from "../../lib/entitlement";
 import { MARKET_LIST, type CountryCode } from "../../lib/market";
@@ -112,7 +113,7 @@ function AppAccount() {
     return (
       <div className="space-y-6">
         <ScreenHeader title={APP_COPY.account.title} description={APP_COPY.account.description} />
-        <section className="flex flex-col items-center rounded-2xl border border-line bg-surface px-6 py-12 text-center shadow-sm">
+        <Card className="flex flex-col items-center px-6 py-12 text-center">
           <p className="text-xs font-semibold uppercase tracking-wider text-brand-fg">
             {APP_COPY.account.signedOutEyebrow}
           </p>
@@ -124,11 +125,11 @@ function AppAccount() {
           </p>
           <a
             href="/app/signin"
-            className="mt-6 inline-flex min-h-12 items-center justify-center rounded-control bg-brand px-5 text-base font-semibold text-on-brand transition-colors hover:bg-brand-strong"
+            className={cn("mt-6", buttonClasses("primary", "md"))}
           >
             {APP_COPY.account.signInButton}
           </a>
-        </section>
+        </Card>
         <FreeForeverNote />
         <Card>
           <h2 className="text-sm font-bold text-fg">{APP_COPY.theme.heading}</h2>
@@ -150,7 +151,7 @@ function AppAccount() {
       {checkout === "success" && (
         <p
           role="status"
-          className="flex items-start gap-2 rounded-card border border-line bg-surface p-4 text-sm leading-relaxed text-fg-muted"
+          className="flex items-start gap-2 rounded-card border border-line bg-surface p-4 text-sm leading-relaxed text-fg-muted shadow-card"
         >
           <InfoIcon className="mt-0.5 h-4 w-4 shrink-0 text-brand-strong" aria-hidden />
           {APP_COPY.account.checkoutSuccess}
@@ -159,7 +160,7 @@ function AppAccount() {
       {checkout === "canceled" && (
         <p
           role="status"
-          className="flex items-start gap-2 rounded-card border border-line bg-surface p-4 text-sm leading-relaxed text-fg-muted"
+          className="flex items-start gap-2 rounded-card border border-line bg-surface p-4 text-sm leading-relaxed text-fg-muted shadow-card"
         >
           <InfoIcon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           {APP_COPY.account.checkoutCanceled}

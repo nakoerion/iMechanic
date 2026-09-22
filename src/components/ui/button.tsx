@@ -6,22 +6,35 @@ import { SpinnerIcon } from "../icons";
  * The one button in the app.
  *
  * Sized for someone standing next to a car: the default height is 48px and
- * nothing drops below 40px. Never render a paywalled action in `primary` on a
- * screen whose main job is free — the free action always owns the primary slot.
+ * nothing drops below 40px (sm = 40px — the floor, still a real tap target).
+ * Never render a paywalled action in `primary` on a screen whose main job is
+ * free — the free action always owns the primary slot.
+ *
+ * A7 — hardware feel. The primary control carries `--shadow-key`, the one
+ * amber-tinted lift shared with the marketing CTA, and every variant travels
+ * 1px down and drops its lift while pressed (`active:`). `aria-pressed` gets
+ * the same treatment so a TOGGLE control reads as physically latched: the
+ * `toggle` variant lights amber when pressed. Nothing here glows, pulses or
+ * animates beyond the press.
  */
 
-export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
+export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "toggle";
 export type ButtonSize = "sm" | "md" | "lg";
 
 const VARIANTS: Record<ButtonVariant, string> = {
   primary:
-    "bg-brand text-on-brand border-2 border-transparent hover:bg-brand-strong active:bg-brand-strong",
+    "bg-brand text-on-brand border-2 border-transparent shadow-key hover:bg-brand-strong active:bg-brand-strong active:shadow-none",
   secondary:
     "bg-surface text-fg border-2 border-line-strong hover:bg-surface-sunken active:bg-surface-sunken",
   ghost:
     "bg-transparent text-fg-muted border-2 border-transparent hover:bg-neutral-fill hover:text-fg active:bg-neutral-fill",
   danger:
     "bg-danger-solid text-on-danger border-2 border-transparent hover:opacity-90 active:opacity-90",
+  /* A latched, hardware-style control: `aria-pressed="true"` fills it with the
+     brand amber, the same selected treatment the chips use. Use it for
+     on/off controls (never for a plain action) and always set aria-pressed. */
+  toggle:
+    "bg-surface text-fg-muted border-2 border-line-strong hover:text-fg aria-pressed:bg-brand aria-pressed:text-on-brand aria-pressed:border-transparent",
 };
 
 const SIZES: Record<ButtonSize, string> = {
@@ -32,8 +45,8 @@ const SIZES: Record<ButtonSize, string> = {
 
 const BASE =
   "inline-flex select-none items-center justify-center rounded-control font-semibold tracking-tight " +
-  "transition-[background-color,color,transform,opacity] duration-100 " +
-  "active:scale-[0.985] disabled:pointer-events-none disabled:opacity-45 " +
+  "transition-[background-color,color,transform,opacity,box-shadow] duration-100 " +
+  "active:translate-y-px active:scale-[0.985] disabled:pointer-events-none disabled:opacity-45 " +
   "aria-busy:cursor-progress";
 
 export function buttonClasses(

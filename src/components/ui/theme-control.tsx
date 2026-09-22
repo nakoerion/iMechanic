@@ -31,7 +31,14 @@ export function ThemeControl({ className }: { className?: string }) {
             className={cn(
               "min-h-12 rounded-[0.5rem] px-2 text-sm font-semibold transition-colors",
               selected
-                ? "bg-navy-950 text-white"
+                /* A6 dark-theme fix: the selected pill used to be raw
+                   `bg-navy-950 text-white`, which in the dark theme painted
+                   navy on `--ui-surface-sunken` — the SAME #0b1220 — so the
+                   chosen option vanished. `bg-brand` + `text-on-brand` is the
+                   app's established selected-chip treatment (vehicle picker,
+                   market picker), legible in both themes, and the group is
+                   still a real radiogroup so the state is never colour-only. */
+                ? "bg-brand text-on-brand"
                 : "text-fg-muted hover:bg-neutral-fill hover:text-fg",
             )}
           >

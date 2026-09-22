@@ -45,7 +45,7 @@ export function ProUpgradePanel({
     return (
       <section
         aria-live="polite"
-        className="rounded-card border border-line bg-surface p-5 shadow-sm"
+        className="rounded-card border border-line bg-surface p-5 shadow-card"
       >
         <p className="text-sm text-fg-muted">{a.planLoading}</p>
       </section>
@@ -54,7 +54,7 @@ export function ProUpgradePanel({
 
   if (state.kind === "error") {
     return (
-      <section className="rounded-card border border-line bg-surface p-5 shadow-sm">
+      <section className="rounded-card border border-line bg-surface p-5 shadow-card">
         <p className="text-sm leading-relaxed text-fg-muted">
           {a.planUnavailable}
         </p>
@@ -69,7 +69,7 @@ export function ProUpgradePanel({
   if (pro) return <ProStatusCard entitlement={entitlement} />;
 
   return (
-    <section className="rounded-card border border-line bg-surface p-5 shadow-sm">
+    <section className="rounded-card border border-line bg-surface p-5 shadow-card">
       <h2 className="flex items-center gap-2 text-base font-bold text-fg">
         <SparkIcon className="h-4 w-4 text-brand-strong" aria-hidden />
         {t.bandsHeading}
@@ -102,7 +102,7 @@ export function ProUpgradePanel({
             {PRICE_BANDS.map((band) => (
               <li
                 key={band.id}
-                className="rounded-card border border-line bg-surface-sunken p-3"
+                className="rounded-plate border border-line bg-surface-sunken p-3"
               >
                 <BandPrice band={band} />
               </li>
@@ -157,7 +157,7 @@ function BandList() {
         {PRICE_BANDS.map((band) => (
           <li
             key={band.id}
-            className="rounded-card border border-line bg-surface-sunken p-4"
+            className="rounded-plate border border-line bg-surface-sunken p-4"
           >
             <BandPrice band={band} />
             <Button
@@ -278,7 +278,7 @@ export function formatPlanDate(value: string | null): string | null {
  */
 export function FreePlanCard({ statusNote }: { statusNote?: string | null }) {
   return (
-    <section className="rounded-card border border-line bg-surface p-5 shadow-sm">
+    <section className="rounded-card border border-line bg-surface p-5 shadow-card">
       <h2 className="text-sm font-bold text-fg">{a.planHeading}</h2>
       <p className="mt-1 text-base font-semibold text-fg">{a.planFreeName}</p>
       <p className="mt-1 text-sm leading-relaxed text-fg-muted">
