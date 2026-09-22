@@ -1,189 +1,371 @@
 /**
- * Dependency-free PNG codec: decode an 8-bit RGB/RGBA PNG, box-resample to a
- * target size, and re-encode as RGBA PNG. Used to generate the exact PWA icon
- * sizes without adding image dependencies. One-off build tool (not shipped).
+ * iMechanic brand icons — deterministic, dependency-free generator.
+ *
+ * The mark is the engine / MIL pictogram (`EngineIcon` in
+ * `src/components/icons.tsx`), not the old spanner. That glyph is the single
+ * source of truth: this script parses its `d` attributes straight out of the
+ * component and rasterises them itself, so the app mark, the browser-tab icon
+ * and the installed PWA icon can never drift apart again.
+ *
+ *   bun scripts/gen-icons.mjs      (also runs under plain `node`)
+ *
+ * Why we draw instead of resizing a bitmap master (the previous approach):
+ * the old flow resized `design/icon-master.png`, a 1MB AI-generated spanner
+ * bitmap, so every shipped icon inherited whatever colours that bitmap
+ * happened to use (#011432 navy / #ffaf26 amber — neither is a design token).
+ * Rendering the vector mark against the real tokens keeps the palette exact
+ * and the output reproducible: same input, byte-identical PNG.
+ *
+ * Outputs
+ *   public/icons/icon-192.png           192  "any"     — manifest
+ *   public/icons/icon-512.png           512  "any"     — manifest
+ *   public/icons/icon-maskable-512.png  512  maskable  — mark inside the 80% safe circle
+ *   public/icons/apple-touch-icon.png   180  opaque    — iOS home screen (D16)
+ *   public/favicon.ico                  16/32/48       — tab fallback for /favicon.ico
+ *   public/icon.svg                     vector tab icon, navy tile + amber mark
+ *   design/engine-mark.svg              vector master (mark only) for store/marketing art
  */
-import { deflateSync, inflateSync } from "node:zlib";
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { deflateSync } from "node:zlib";
 
-const CRC_TABLE = (() => {
-  const t = new Int32Array(256);
-  for (let n = 0; n < 256; n++) {
-    let c = n;
-    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-    t[n] = c;
+/* Design tokens (src/styles/app.css). Amber-400 is the brand amber the notes
+   already ask the icons to standardise on; navy-950 is also the manifest
+   theme_color and the app's header/tab-bar navy, so the install tile finally
+   matches the chrome it opens into. */
+const NAVY = [0x0b, 0x12, 0x20]; // --color-navy-950
+const AMBER = [0xfb, 0xbf, 0x24]; // --color-brand (amber-400)
+const NAVY_HEX = "#0b1220";
+const AMBER_HEX = "#fbbf24";
+
+/** Stroke weight in viewBox units — matches `base()` in icons.tsx. */
+const STROKE = 2;
+const VIEWBOX = 24;
+
+/* ------------------------------------------------------------------ */
+/* Glyph source: EngineIcon in src/components/icons.tsx                */
+/* ------------------------------------------------------------------ */
+function readEngineGlyph() {
+  const src = readFileSync("src/components/icons.tsx", "utf8");
+  const fn = /export function EngineIcon\(props: IconProps\)[\s\S]*?<\/svg>/.exec(
+    src,
+  );
+  if (!fn) {
+    throw new Error(
+      "EngineIcon not found in src/components/icons.tsx — the brand mark moved?",
+    );
   }
-  return t;
-})();
-
-function crc32(buf) {
-  let c = ~0;
-  for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
-  return (~c) >>> 0;
+  const paths = [...fn[0].matchAll(/<path d="([^"]+)"/g)].map((m) => m[1]);
+  if (paths.length === 0) throw new Error("EngineIcon has no <path d> elements");
+  return paths.map((d) => ({ d, subpaths: parsePath(d) }));
 }
 
-function chunk(type, data) {
-  const len = Buffer.alloc(4);
-  len.writeUInt32BE(data.length);
-  const typeBuf = Buffer.from(type, "ascii");
-  const crcBuf = Buffer.alloc(4);
-  crcBuf.writeUInt32BE(crc32(Buffer.concat([typeBuf, data])));
-  return Buffer.concat([len, typeBuf, data, crcBuf]);
-}
-
-function decodePng(buf) {
-  if (buf.readUInt32BE(0) !== 0x89504e47) throw new Error("Not a PNG");
-  let off = 8;
-  let width, height, bitDepth, colorType, channels;
-  const idat = [];
-  while (off < buf.length) {
-    const len = buf.readUInt32BE(off);
-    const type = buf.toString("ascii", off + 4, off + 8);
-    const data = buf.subarray(off + 8, off + 8 + len);
-    if (type === "IHDR") {
-      width = data.readUInt32BE(0);
-      height = data.readUInt32BE(4);
-      bitDepth = data[8];
-      colorType = data[9];
-      if (bitDepth !== 8) throw new Error(`Unsupported bit depth ${bitDepth}`);
-      channels = colorType === 6 ? 4 : colorType === 2 ? 3 : (() => { throw new Error(`Unsupported color type ${colorType}`); })();
-    } else if (type === "IDAT") {
-      idat.push(data);
-    } else if (type === "IEND") {
-      break;
-    }
-    off += 12 + len;
-  }
-  const raw = inflateSync(Buffer.concat(idat));
-  const bpp = channels; // 8-bit, so channels == bytes per pixel
-  const stride = width * bpp;
-  const out = Buffer.alloc(width * height * 4); // RGBA always
-  const prev = Buffer.alloc(stride);
-  const rawSub = Buffer.alloc(stride);
-  let pos = 0;
-  const paeth = (a, b, c) => {
-    const p = a + b - c;
-    const pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
-    return pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
+/**
+ * Minimal SVG path parser — exactly the commands the icon set uses
+ * (M/m L/l H/h V/v Z/z). Anything else throws rather than silently drawing a
+ * different mark: the brand icon must never be an approximation of the glyph.
+ */
+function parsePath(d) {
+  const toks = d.match(/[MmLlHhVvZz]|-?\d*\.?\d+/g) ?? [];
+  const subs = [];
+  let cmd = null;
+  let x = 0;
+  let y = 0;
+  let startX = 0;
+  let startY = 0;
+  let cur = null;
+  let i = 0;
+  const num = () => {
+    const v = Number(toks[i++]);
+    if (Number.isNaN(v)) throw new Error(`Bad number in path: ${d}`);
+    return v;
   };
-  for (let y = 0; y < height; y++) {
-    const filter = raw[pos++];
-    const line = raw.subarray(pos, pos + stride);
-    for (let x = 0; x < stride; x++) {
-      const left = x >= bpp ? rawSub[x - bpp] : 0;
-      const up = prev[x];
-      const upLeft = x >= bpp ? prev[x - bpp] : 0;
-      let v;
-      switch (filter) {
-        case 0: v = line[x]; break;
-        case 1: v = (line[x] + left) & 0xff; break;
-        case 2: v = (line[x] + up) & 0xff; break;
-        case 3: v = (line[x] + ((left + up) >> 1)) & 0xff; break;
-        case 4: v = (line[x] + paeth(left, up, upLeft)) & 0xff; break;
-        default: throw new Error(`Bad filter ${filter}`);
+  const push = () => {
+    if (!cur) throw new Error(`Path does not start with M: ${d}`);
+    cur.points.push([x, y]);
+  };
+  while (i < toks.length) {
+    const t = toks[i];
+    if (/^[MmLlHhVvZz]$/.test(t)) {
+      cmd = t;
+      i++;
+    } else if (cmd === null) {
+      throw new Error(`Path does not start with M: ${d}`);
+    }
+    switch (cmd) {
+      case "M":
+      case "m": {
+        if (cmd === "m") {
+          x += num();
+          y += num();
+        } else {
+          x = num();
+          y = num();
+        }
+        cur = { points: [[x, y]], closed: false };
+        subs.push(cur);
+        startX = x;
+        startY = y;
+        // Subsequent coordinate pairs after M/m are implicit linetos.
+        cmd = cmd === "m" ? "l" : "L";
+        break;
       }
-      rawSub[x] = v;
+      case "L":
+        x = num();
+        y = num();
+        push();
+        break;
+      case "l":
+        x += num();
+        y += num();
+        push();
+        break;
+      case "H":
+        x = num();
+        push();
+        break;
+      case "h":
+        x += num();
+        push();
+        break;
+      case "V":
+        y = num();
+        push();
+        break;
+      case "v":
+        y += num();
+        push();
+        break;
+      case "Z":
+      case "z":
+        cur.closed = true;
+        if (x !== startX || y !== startY) push();
+        x = startX;
+        y = startY;
+        cmd = null;
+        break;
+      default:
+        throw new Error(`Unsupported path command "${cmd}" in ${d}`);
     }
-    // write RGBA row
-    for (let x = 0; x < width; x++) {
-      const si = x * bpp;
-      const di = (y * width + x) * 4;
-      out[di] = rawSub[si];
-      out[di + 1] = channels >= 2 ? rawSub[si + 1] : rawSub[si];
-      out[di + 2] = channels >= 3 ? rawSub[si + 2] : rawSub[si];
-      out[di + 3] = channels === 4 ? rawSub[si + 3] : 255;
-    }
-    prev.set(rawSub);
-    pos += stride;
   }
-  return { width, height, rgba: out };
+  return subs;
 }
 
-function resize(rgba, sw, sh, dw, dh) {
-  const out = Buffer.alloc(dw * dh * 4);
-  for (let dy = 0; dy < dh; dy++) {
-    const ys = (dy * sh) / dh;
-    const ye = ((dy + 1) * sh) / dh;
-    const y0 = Math.floor(ys), y1 = Math.max(Math.floor(ye - 1e-9), y0);
-    for (let dx = 0; dx < dw; dx++) {
-      const xs = (dx * sw) / dw;
-      const xe = ((dx + 1) * sw) / dw;
-      const x0 = Math.floor(xs), x1 = Math.max(Math.floor(xe - 1e-9), x0);
-      let r = 0, g = 0, b = 0, a = 0, n = 0;
-      for (let y = y0; y <= y1; y++) {
-        for (let x = x0; x <= x1; x++) {
-          const i = (y * sw + x) * 4;
-          r += rgba[i]; g += rgba[i + 1]; b += rgba[i + 2]; a += rgba[i + 3];
-          n++;
-        }
+/** Every stroked segment of the glyph, in viewBox units. */
+function segments(glyph) {
+  const out = [];
+  for (const path of glyph) {
+    for (const sub of path.subpaths) {
+      const pts = sub.points;
+      for (let k = 0; k < pts.length - 1; k++) {
+        out.push([pts[k][0], pts[k][1], pts[k + 1][0], pts[k + 1][1]]);
       }
-      const di = (dy * dw + dx) * 4;
-      out[di] = Math.round(r / n);
-      out[di + 1] = Math.round(g / n);
-      out[di + 2] = Math.round(b / n);
-      out[di + 3] = Math.round(a / n);
     }
   }
   return out;
 }
 
+/** Ink bounding box in viewBox units, padded by half the stroke (round caps). */
+function inkBox(glyph) {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const path of glyph) {
+    for (const sub of path.subpaths) {
+      for (const [px, py] of sub.points) {
+        if (px < minX) minX = px;
+        if (py < minY) minY = py;
+        if (px > maxX) maxX = px;
+        if (py > maxY) maxY = py;
+      }
+    }
+  }
+  const pad = STROKE / 2;
+  return {
+    minX: minX - pad,
+    minY: minY - pad,
+    maxX: maxX + pad,
+    maxY: maxY + pad,
+    cx: (minX + maxX) / 2,
+    cy: (minY + maxY) / 2,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Rasteriser: distance-to-segment coverage = free anti-aliasing       */
+/* ------------------------------------------------------------------ */
+function distToSegment(px, py, ax, ay, bx, by) {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const l2 = dx * dx + dy * dy;
+  let t = l2 === 0 ? 0 : ((px - ax) * dx + (py - ay) * dy) / l2;
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  const qx = ax + t * dx - px;
+  const qy = ay + t * dy - py;
+  return Math.sqrt(qx * qx + qy * qy);
+}
+
+/**
+ * Render the mark into an RGBA buffer: opaque navy plate, amber glyph.
+ * `span` is the fraction of the canvas the 24-unit design box occupies; the
+ * ink (not the box) is centred, which is what makes a wide pictogram sit still.
+ */
+function render(size, span, glyph, segs, box) {
+  const scale = (span * size) / VIEWBOX;
+  const tx = size / 2 - box.cx * scale;
+  const ty = size / 2 - box.cy * scale;
+  const half = (STROKE * scale) / 2;
+  const out = Buffer.alloc(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const ux = (x + 0.5 - tx) / scale;
+      const uy = (y + 0.5 - ty) / scale;
+      let d = Infinity;
+      for (const s of segs) {
+        const dd = distToSegment(ux, uy, s[0], s[1], s[2], s[3]);
+        if (dd < d) d = dd;
+      }
+      // Coverage ramps over one device pixel: d is in viewBox units.
+      let cov = 0.5 + (half - d * scale);
+      cov = cov < 0 ? 0 : cov > 1 ? 1 : cov;
+      const o = (y * size + x) * 4;
+      out[o] = Math.round(NAVY[0] + (AMBER[0] - NAVY[0]) * cov);
+      out[o + 1] = Math.round(NAVY[1] + (AMBER[1] - NAVY[1]) * cov);
+      out[o + 2] = Math.round(NAVY[2] + (AMBER[2] - NAVY[2]) * cov);
+      out[o + 3] = 255;
+    }
+  }
+  return out;
+}
+
+/* ------------------------------------------------------------------ */
+/* PNG / ICO writers                                                   */
+/* ------------------------------------------------------------------ */
+function crc32(buf) {
+  let c = ~0;
+  for (let i = 0; i < buf.length; i++) {
+    c ^= buf[i];
+    for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xedb88320 & -(c & 1));
+  }
+  return ~c >>> 0;
+}
+function chunk(type, data) {
+  const len = Buffer.alloc(4);
+  len.writeUInt32BE(data.length, 0);
+  const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(body), 0);
+  return Buffer.concat([len, body, crc]);
+}
 function encodePng(width, height, rgba) {
   const sig = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(width, 0);
   ihdr.writeUInt32BE(height, 4);
-  ihdr[8] = 8; ihdr[9] = 6; ihdr[10] = 0; ihdr[11] = 0; ihdr[12] = 0; // RGBA
+  ihdr[8] = 8;
+  ihdr[9] = 6; // RGBA
   const stride = width * 4;
   const raw = Buffer.alloc((stride + 1) * height);
   for (let y = 0; y < height; y++) {
     raw[y * (stride + 1)] = 0; // filter none
     rgba.copy(raw, y * (stride + 1) + 1, y * stride, (y + 1) * stride);
   }
-  const idat = deflateSync(raw, { level: 9 });
   return Buffer.concat([
     sig,
     chunk("IHDR", ihdr),
-    chunk("IDAT", idat),
+    chunk("IDAT", deflateSync(raw, { level: 9 })),
     chunk("IEND", Buffer.alloc(0)),
   ]);
 }
-
-/** Composite any transparency onto a solid background (QA defect D16):
- *  iOS composites a transparent apple-touch-icon onto BLACK, so that icon
- *  must be flattened onto the brand navy instead. */
-function flatten(rgba, [br, bg, bb]) {
-  const out = Buffer.from(rgba);
-  for (let i = 0; i < out.length; i += 4) {
-    const a = out[i + 3] / 255;
-    out[i] = Math.round(out[i] * a + br * (1 - a));
-    out[i + 1] = Math.round(out[i + 1] * a + bg * (1 - a));
-    out[i + 2] = Math.round(out[i + 2] * a + bb * (1 - a));
-    out[i + 3] = 255;
+/** ICO container with PNG payloads (every browser we support reads these). */
+function encodeIco(images) {
+  const header = Buffer.alloc(6);
+  header.writeUInt16LE(1, 2); // type: icon
+  header.writeUInt16LE(images.length, 4);
+  let offset = 6 + 16 * images.length;
+  const entries = [];
+  for (const im of images) {
+    const e = Buffer.alloc(16);
+    e[0] = im.size >= 256 ? 0 : im.size;
+    e[1] = im.size >= 256 ? 0 : im.size;
+    e.writeUInt16LE(1, 4); // colour planes
+    e.writeUInt16LE(32, 6); // bits per pixel
+    e.writeUInt32LE(im.png.length, 8);
+    e.writeUInt32LE(offset, 12);
+    offset += im.png.length;
+    entries.push(e);
   }
-  return out;
+  return Buffer.concat([header, ...entries, ...images.map((i) => i.png)]);
 }
 
-const NAVY_950 = [0x0b, 0x12, 0x20]; // --color-navy-950, the PWA theme colour
+/* ------------------------------------------------------------------ */
+/* SVG writers                                                         */
+/* ------------------------------------------------------------------ */
+function svgMark(glyph, span, box) {
+  const tx = (VIEWBOX / 2 - box.cx * span).toFixed(3);
+  const ty = (VIEWBOX / 2 - box.cy * span).toFixed(3);
+  const paths = glyph
+    .map((p) => `    <path d="${p.d}" />`)
+    .join("\n");
+  return `<g fill="none" stroke="${AMBER_HEX}" stroke-width="${STROKE}"
+     stroke-linecap="round" stroke-linejoin="round"
+     transform="translate(${tx} ${ty}) scale(${span})">
+${paths}
+  </g>`;
+}
+function iconSvg(glyph, span, box) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <title>iMechanic</title>
+  <rect width="24" height="24" rx="4.6" fill="${NAVY_HEX}" />
+  ${svgMark(glyph, span, box)}
+</svg>
+`;
+}
+function masterMarkSvg(glyph, span, box) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${VIEWBOX} ${VIEWBOX}" width="512" height="512">
+  <title>iMechanic engine mark</title>
+  <!-- Transparent background: drop this on any surface. Generated by
+       scripts/gen-icons.mjs from EngineIcon in src/components/icons.tsx. -->
+  ${svgMark(glyph, span, box)}
+</svg>
+`;
+}
 
+/* ------------------------------------------------------------------ */
 function main() {
-  // Master source asset lives outside public/ so the 1MB original is never
-  // shipped to visitors (QA defect D20); only the resized icons are served.
-  const src = readFileSync("design/icon-master.png");
-  const { width, height, rgba } = decodePng(src);
-  console.log(`decoded ${width}x${height}`);
-  const jobs = [
-    ["public/icons/icon-512.png", 512],
-    ["public/icons/icon-192.png", 192],
-    ["public/icons/icon-maskable-512.png", 512],
-    ["public/icons/apple-touch-icon.png", 180, { opaque: true }],
-  ];
-  for (const [file, size, opts] of jobs) {
-    let resized = resize(rgba, width, height, size, size);
-    if (opts?.opaque) resized = flatten(resized, NAVY_950);
-    mkdirSync("public/icons", { recursive: true });
-    writeFileSync(file, encodePng(size, size, resized));
-    console.log(`wrote ${file} (${size}x${size}${opts?.opaque ? ", opaque" : ""})`);
-  }
-}
+  const glyph = readEngineGlyph();
+  const segs = segments(glyph);
+  const box = inkBox(glyph);
 
+  /* `any` icons carry the mark at ~79% of the plate (matching the visual
+     weight of the mark it replaces); maskable sits inside the safe circle. */
+  const ANY = 0.92;
+  const MASKABLE = 0.76;
+
+  const jobs = [
+    ["public/icons/icon-512.png", 512, ANY],
+    ["public/icons/icon-192.png", 192, ANY],
+    ["public/icons/icon-maskable-512.png", 512, MASKABLE],
+    ["public/icons/apple-touch-icon.png", 180, ANY],
+  ];
+  mkdirSync("public/icons", { recursive: true });
+  for (const [file, size, span] of jobs) {
+    writeFileSync(file, encodePng(size, size, render(size, span, glyph, segs, box)));
+    console.log(`wrote ${file} (${size}x${size})`);
+  }
+
+  const ico = [16, 32, 48].map((size) => ({
+    size,
+    png: encodePng(size, size, render(size, 1, glyph, segs, box)),
+  }));
+  writeFileSync("public/favicon.ico", encodeIco(ico));
+  console.log("wrote public/favicon.ico (16, 32, 48)");
+
+  writeFileSync("public/icon.svg", iconSvg(glyph, ANY, box));
+  console.log("wrote public/icon.svg");
+
+  mkdirSync("design", { recursive: true });
+  writeFileSync("design/engine-mark.svg", masterMarkSvg(glyph, ANY, box));
+  console.log("wrote design/engine-mark.svg");
+}
 main();

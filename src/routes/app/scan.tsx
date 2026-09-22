@@ -2,11 +2,14 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Card, ScreenHeader } from "../../components/app-shell";
 import {
+  AdapterIcon,
   AlertIcon,
+  BluetoothIcon,
   CheckIcon,
   InfoIcon,
-  PlugIcon,
+  ObdPortIcon,
   ScanIcon,
+  SweepIcon,
 } from "../../components/icons";
 import { FaultCodeCard } from "../../components/severity/fault-code-card";
 import { AiRootCausePanel } from "../../components/severity/ai-root-cause-panel";
@@ -309,6 +312,19 @@ function AppScan() {
           {phase.message}
         </p>
       )}
+      {/* Working state (connecting / reading codes). A4: the tach sweep is the
+          progress motif, and it reports that a procedure is running — never a
+          measurement — so it sits beside the status label and never next to a
+          number. The label is the same copy the buttons already use. */}
+      {phase.kind === "working" && (
+        <p
+          role="status"
+          className="flex items-center gap-2 rounded-card border border-line bg-surface-sunken px-3 py-2.5 text-sm font-semibold text-fg"
+        >
+          <SweepIcon className="h-5 w-5 shrink-0 text-brand-strong motion-safe:animate-spin" />
+          {phase.label}
+        </p>
+      )}
 
       {/* Last scan result — the payoff of the screen. */}
       {lastScan === "loading" ? (
@@ -385,10 +401,14 @@ function AppScan() {
             </Button>
           </Card>
 
-          {/* Live adapter */}
+          {/* Live adapter.
+              A4: the OBD2 socket and the dongle carry the imagery — the port
+              under the dash in the heading, the dongle on the USB button and
+              the Bluetooth mark on the wireless ones, so which link is which
+              is legible before the label is read. */}
           <Card>
             <h2 className="flex items-center gap-2 text-sm font-bold text-fg">
-              <PlugIcon className="h-4 w-4 text-brand-strong" />
+              <ObdPortIcon className="h-4 w-4 text-brand-strong" />
               {t.liveHeading}
             </h2>
             <p className="mt-1 text-xs leading-relaxed text-fg-subtle">
@@ -415,6 +435,7 @@ function AppScan() {
                     <Button
                       variant="secondary"
                       fullWidth
+                      leadingIcon={<BluetoothIcon className="h-4 w-4" />}
                       loading={liveBusy === "native"}
                       loadingLabel={t.liveConnecting}
                       onClick={() => void onLiveConnect("native")}
@@ -430,6 +451,7 @@ function AppScan() {
                   <Button
                     variant="secondary"
                     fullWidth
+                    leadingIcon={<BluetoothIcon className="h-4 w-4" />}
                     loading={liveBusy === "bluetooth"}
                     loadingLabel={t.liveConnecting}
                     onClick={() => void onLiveConnect("bluetooth")}
@@ -441,6 +463,7 @@ function AppScan() {
                   <Button
                     variant="secondary"
                     fullWidth
+                    leadingIcon={<AdapterIcon className="h-4 w-4" />}
                     loading={liveBusy === "serial"}
                     loadingLabel={t.liveConnecting}
                     onClick={() => void onLiveConnect("serial")}

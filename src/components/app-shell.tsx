@@ -4,10 +4,10 @@ import { cn } from "../lib/cn";
 import { APP_COPY } from "../lib/copy";
 import {
   AccountIcon,
+  EngineIcon,
   HistoryIcon,
   ScanIcon,
   VehiclesIcon,
-  WrenchIcon,
 } from "./icons";
 
 /**
@@ -37,6 +37,12 @@ export const NAV_ITEMS: NavItem[] = [
 /* Brand                                                               */
 /* ------------------------------------------------------------------ */
 
+/** The brand mark: the engine / MIL pictogram on the amber tile.
+ *
+ *  A4 replaced the spanner that used to sit here — a wrench reads as "someone
+ *  else fixes cars", and the product is the owner reading their own engine. The
+ *  same glyph is the installed app icon (scripts/gen-icons.mjs renders it from
+ *  `EngineIcon`, so the tile and this mark cannot drift apart). */
 function BrandMark({ className }: { className?: string }) {
   return (
     <span
@@ -45,7 +51,7 @@ function BrandMark({ className }: { className?: string }) {
         className,
       )}
     >
-      <WrenchIcon className="h-4.5 w-4.5" />
+      <EngineIcon className="h-4.5 w-4.5" />
     </span>
   );
 }

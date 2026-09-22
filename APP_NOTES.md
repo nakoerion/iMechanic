@@ -9,7 +9,7 @@ cd /home/team/shared/site
 bun run dev        # working site (do not run alongside a build — modest RAM)
 bun run build      # production build; must pass before any slice is "done"
 bun run migrate    # apply db/migrations/*.sql (idempotent, safe to re-run)
-node scripts/gen-icons.mjs   # regenerate PWA icons from public/icons/icon-master.png
+bun scripts/gen-icons.mjs    # regenerate PWA + tab icons from EngineIcon (src/components/icons.tsx)
 ```
 
 ## Environments
@@ -71,8 +71,8 @@ re-fetch the files with a wider range.
 - `/app` carries `robots: noindex` (D26) until scanning ships in S3 — remove
   it in the S3 slice.
 - Icons in `public/icons/` are engineer-generated placeholders. The designer
-  replaces them with the amber-on-navy wrench mark (standardise on amber-400 —
-  the favicon currently uses amber-500 and drifts from the on-page mark).
+  are generated from the app's own `EngineIcon` (A4): navy-950 plate + amber-400
+  (#fbbf24) engine mark. See the A4 section at the end of this file.
 
 ## Slice status
 
@@ -1142,3 +1142,41 @@ Fix (correctness only, no visual redesign):
    dependent, so a German user's browser would have mismatched every date on the account screen.
 3. `APP_NOTES` note (this one).
 Rule going forward: anything rendered during SSR must be formatted by us, never by runtime locale data.
+
+## A4 (brand mark + icons) — engineer, branch `a4-icon-set-brand-mark`
+- **The brand mark is the engine/MIL glyph, not the spanner** (proposal §4 / §5 motif #3).
+  `BrandMark` in `src/components/app-shell.tsx`, and `EngineMark` in
+  `src/components/landing/ui.tsx` (renamed from `WrenchMark`; it wraps the app's own
+  `EngineIcon`, so landing logo / header tile / app icon are one shape) — plus the
+  offline page. `WrenchIcon`/`WrenchMark` are now unused: prune deliberately, not by
+  accident, once the designer confirms nothing else wants them.
+- **Icon wiring on `/app/scan`:** `ObdPortIcon` on the "Connect your adapter" heading,
+  `BluetoothIcon` on both BLE buttons, `AdapterIcon` on the USB button, and a new
+  `role="status"` working-state row whose `SweepIcon` sits beside the **existing**
+  `phase.label` copy (no new strings, `motion-safe:animate-spin` only). `ScanIcon` call
+  sites (demo card, home CTA, history) already render the rewritten scan-over-engine glyph.
+- **Deliberately still unused:** `GaugeIcon`, `BatteryIcon`, `ThermoIcon` — they belong to
+  the live-sensor surface (freeze frames / live data), which is not built. Do not scatter
+  them as decoration; wire them when that screen exists.
+- **PWA/tab icons are generated, never hand-painted.** `scripts/gen-icons.mjs` parses
+  `EngineIcon`'s `d` attributes out of `src/components/icons.tsx` and rasterises them
+  itself (distance-to-segment coverage = anti-aliasing, zero image deps): `icon-192/512`,
+  maskable-512 (mark inside the 80% safe circle), `apple-touch-icon` (opaque),
+  `public/favicon.ico` (16/32/48 PNG-in-ICO) and `public/icon.svg`. `design/engine-mark.svg`
+  is the committed vector master (transparent) for store/marketing art. `design/icon-master.png`
+  (the old spanner bitmap) is no longer read — kept only as the designer's asset. Re-running
+  the script is byte-identical; rerun it after any change to `EngineIcon`.
+- **Palette snapped to the tokens:** the shipped icons were `#011432`/`#ffaf26` (inherited
+  from that bitmap; neither is a token). The engine icons use `--color-navy-950` `#0b1220`
+  (also the manifest `theme_color` and the header navy) and `--color-brand` `#fbbf24`
+  (amber-400, the value this file already asked icons to standardise on). Same
+  navy-plate/amber-mark art as before — now exactly on token.
+- `src/routes/__root.tsx`: the inline spanner SVG data-URI favicon is replaced by `/icon.svg`
+  + `/favicon.ico`. Verified over HTTP on :3000 (`image/svg+xml`, `image/x-icon`), and the
+  ICO parses as 3 valid PNG entries (16/32/48).
+- **Not touched:** `native/www/app/**` and `android/app/src/main/assets/public/app/**` are
+  committed copies of an older web build and still carry the old spanner icons/favicon; they
+  refresh on the next `bun run native:sync` (S7, owner-gated).
+- Verified: `tsc --noEmit` 0 errors, `bun run build` clean, `bun run test` 185 passed |
+  16 skipped (the 3 DB suites abort on the missing `TEST_DATABASE_URL`, exit 1 by design),
+  landing + `/app/scan` loaded signed-in at 390x844.

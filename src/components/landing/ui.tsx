@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { EngineIcon } from "../icons";
 import { cn } from "../../lib/cn";
 
 /**
@@ -88,21 +89,13 @@ export function Note({
   );
 }
 
-export function WrenchMark({ className = "h-5 w-5" }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2.2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden
-    >
-      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-    </svg>
-  );
+/** The brand mark on marketing surfaces (A4 — it was a spanner until then).
+ *
+ *  It is the app's own `EngineIcon`, so the logo on the landing page, the tile
+ *  in the app header and the installed app icon are one shape. Marketing
+ *  surfaces keep the slightly heavier 2.2 stroke the old spanner mark used. */
+export function EngineMark({ className = "h-5 w-5" }: { className?: string }) {
+  return <EngineIcon className={className} strokeWidth={2.2} />;
 }
 
 export function TickIcon({ className = "h-5 w-5" }: { className?: string }) {
