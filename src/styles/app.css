@@ -491,6 +491,19 @@
   }
 }
 
+/* The status lamp on the hero's OBD adapter illustration (M2). Decorative,
+   motion-safe only, and deliberately NOT a severity signal: it is amber
+   chrome on a drawing, never a verdict. */
+@keyframes im-lamp {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .im-rise {
     animation: im-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -506,6 +519,9 @@
   }
   .im-delay-4 {
     animation-delay: 280ms;
+  }
+  .im-lamp {
+    animation: im-lamp 2.8s ease-in-out infinite;
   }
 
   @supports (animation-timeline: view()) {
@@ -528,6 +544,51 @@
      inline string in ~20 components. Same four classes, one name. */
   .label-micro {
     @apply text-xs font-semibold uppercase tracking-wider;
+  }
+  /* ---------------------------------------------------------------- */
+  /* Marketing ground (M2). Two decorative backgrounds that replaced the */
+  /* hero's single blurred amber blob — motif 8 ("technical grid") and a */
+  /* low horizon glow.                                                   */
+  /*                                                                     */
+  /* No token is added for either, on purpose: both paint ONLY on the    */
+  /* fixed navy marketing ground (`bg-navy-950`, identical in both       */
+  /* themes), so a themed `--ui-*` pair would be wrong by construction.  */
+  /* Both are pure decoration behind content — they carry no text, no    */
+  /* icon and no border, separate nothing interactive, and so have no    */
+  /* contrast threshold to meet. Measured anyway, against navy-950       */
+  /* #0b1220: the grid line lands at 1.08:1 and the brightest point of   */
+  /* the horizon glow at 1.44:1 — i.e. both are below the 3:1 non-text   */
+  /* threshold BY DESIGN. Nothing may ever be conveyed by them alone.    */
+  /* ---------------------------------------------------------------- */
+  .im-techgrid {
+    /* 3.5% white hairlines on a 56px cell — a drawing grid, not a table. */
+    background-image:
+      linear-gradient(to right, rgb(255 255 255 / 0.035) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(255 255 255 / 0.035) 1px, transparent 1px);
+    background-size: 56px 56px;
+    /* Fades out before the section edge so it never reads as a border. */
+    -webkit-mask-image: radial-gradient(
+      120% 90% at 50% 15%,
+      #000 0%,
+      #000 45%,
+      transparent 85%
+    );
+    mask-image: radial-gradient(
+      120% 90% at 50% 15%,
+      #000 0%,
+      #000 45%,
+      transparent 85%
+    );
+  }
+  .im-horizon {
+    /* One wide, low amber glow along the bottom edge — the light the
+       instrument is lit by, not a blob floating in the corner. */
+    background-image: radial-gradient(
+      80% 62% at 50% 106%,
+      rgb(251 191 36 / 0.18) 0%,
+      rgb(251 191 36 / 0.06) 40%,
+      transparent 74%
+    );
   }
   .pt-safe {
     padding-top: env(safe-area-inset-top);

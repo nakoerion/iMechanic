@@ -6,10 +6,12 @@ import { sql } from "../db";
 import { ProductShowcase } from "../components/landing/product-showcase";
 import { PhoneFrame } from "../components/landing/phone-frame";
 import { SAMPLE_CAPTION, SAMPLE_SCAN } from "../components/landing/sample-data";
+import { ObdIllustration } from "../components/landing/obd-illustration";
 import {
   ArrowIcon,
   Eyebrow,
   Note,
+  Plate,
   SectionHeader,
   TickIcon,
   EngineMark,
@@ -263,13 +265,16 @@ function Nav() {
 function Hero() {
   return (
     <section id="top" className="relative overflow-hidden bg-navy-950 text-white">
+      {/* M2 ground: a 3.5% hairline technical grid (motif 8) plus one low
+          horizon glow, replacing the blurred amber blob that used to float in
+          the corner. Both are decorative backgrounds defined in app.css. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute -top-48 right-[-10%] h-[34rem] w-[34rem] rounded-full bg-amber-400/12 blur-3xl"
+        className="im-techgrid pointer-events-none absolute inset-0"
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute bottom-[-12rem] left-[-8%] h-[28rem] w-[28rem] rounded-full bg-navy-700/50 blur-3xl"
+        className="im-horizon pointer-events-none absolute inset-x-0 bottom-0 h-[26rem]"
       />
       <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-4 pb-14 pt-12 sm:px-6 lg:grid-cols-[1.1fr_0.9fr] lg:gap-10 lg:pb-20 lg:pt-18">
         <div>
@@ -316,6 +321,12 @@ function Hero() {
               </li>
             ))}
           </ul>
+
+          {/* M2: the object the whole product starts from, drawn rather than
+              photographed — a hand-held ELM327 going into a 16-pin OBD2 port.
+              Decorative (the facts above already say it), so it is
+              aria-hidden inside the component. */}
+          <ObdIllustration className="im-rise im-delay-4 mt-8 max-w-[26rem] lg:mt-10" />
         </div>
 
         {/* The hero visual IS the product: the real verdict + code cards. */}
@@ -330,20 +341,17 @@ function Hero() {
         </div>
       </div>
 
-      {/* Capability strip — plain facts about the product, no social proof. */}
-      <div className="relative border-t border-white/10 bg-navy-900/60">
-        <dl className="mx-auto grid max-w-6xl gap-x-6 gap-y-5 px-4 py-6 sm:grid-cols-2 sm:px-6 lg:grid-cols-4">
-          {CAPABILITY_STRIP.map((item) => (
-            <div key={item.label}>
-              <dt className="text-xs font-bold uppercase tracking-wider text-amber-300">
-                {item.label}
-              </dt>
-              <dd className="mt-1 text-sm font-medium leading-snug text-slate-200">
-                {item.value}
-              </dd>
-            </div>
-          ))}
-        </dl>
+      {/* Capability strip — plain facts about the product, no social proof.
+          M3 renders it as a SPEC PLATE: a thin dark band of mono values
+          separated by hairlines, the way a machine states its own
+          specification. The four facts are unchanged. */}
+      <div className="relative border-y border-white/10 bg-navy-900">
+        <Plate
+          tone="dark"
+          layout="strip"
+          items={CAPABILITY_STRIP}
+          className="mx-auto max-w-6xl"
+        />
       </div>
     </section>
   );
@@ -368,53 +376,67 @@ function HowItWorks() {
           </p>
         </SectionHeader>
 
-        <ol className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {STEPS.map((step, i) => (
-            <li
-              key={step.name}
-              className={
-                "im-reveal group relative flex flex-col rounded-2xl border p-6 transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:shadow-lg " +
-                (i === 0
-                  ? "border-brand bg-warn-fill lg:col-span-1"
-                  : "border-line bg-surface-sunken hover:border-line-strong")
-              }
-            >
-              <div className="flex items-center gap-3">
-                <span
-                  className={
-                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-extrabold " +
-                    (i === 0
-                      ? "bg-brand text-on-brand"
-                      : "bg-navy-950 text-brand")
-                  }
+        {/* M3: the seven steps are a SERVICE PROCEDURE, not a card grid —
+            01…07 in mono on one vertical hairline rail, the same rail the
+            app's guided repair uses for its steps. Copy is unchanged. */}
+        <div className="mt-12 grid gap-10 lg:grid-cols-[1.6fr_1fr] lg:gap-12">
+          <ol className="max-w-2xl">
+            {STEPS.map((step, i) => {
+              const last = i === STEPS.length - 1;
+              return (
+                <li
+                  key={step.name}
+                  className="im-reveal grid grid-cols-[2.5rem_1fr] gap-x-4 sm:grid-cols-[3rem_1fr] sm:gap-x-5"
                 >
-                  {i + 1}
-                </span>
-                <h3 className="text-lg font-bold tracking-tight text-navy-950">
-                  {step.name}
-                </h3>
-              </div>
-              <p className="mt-3 text-[15px] leading-relaxed text-slate-600">
-                {step.text}
-              </p>
-            </li>
-          ))}
-          <li className="im-reveal flex flex-col justify-between rounded-2xl bg-navy-950 p-6 text-white">
-            <div>
-              <h3 className="text-lg font-bold tracking-tight">
-                Walk it yourself
-              </h3>
-              <p className="mt-3 text-[15px] leading-relaxed text-slate-300">
-                The whole path is in the app now, on the free tier. Start with a
-                demo scan if your adapter hasn't arrived yet.
-              </p>
-            </div>
+                  {/* The rail: the step number, then the hairline that
+                      carries the eye to the next step. */}
+                  <div className="flex flex-col items-center">
+                    <span
+                      className={
+                        /* Fixed palette, not role tokens: this section is a
+                           permanently white marketing ground, so a themed
+                           token would flip to a dark-theme value on white. */
+                        "num font-mono text-sm font-bold leading-6 tracking-[0.08em] " +
+                        (i === 0 ? "text-amber-700" : "text-slate-500")
+                      }
+                    >
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                    <span
+                      aria-hidden
+                      className={
+                        "mt-2 w-px flex-1 " +
+                        (last ? "bg-transparent" : "bg-slate-300")
+                      }
+                    />
+                  </div>
+                  <div className={last ? "pb-0" : "pb-8"}>
+                    <h3 className="text-lg font-bold leading-6 tracking-tight text-navy-950">
+                      {step.name}
+                    </h3>
+                    <p className="mt-2 text-[15px] leading-relaxed text-slate-600">
+                      {step.text}
+                    </p>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+
+          <div className="im-reveal h-fit rounded-card bg-navy-950 p-6 text-white lg:sticky lg:top-24">
+            <h3 className="text-lg font-bold tracking-tight">
+              Walk it yourself
+            </h3>
+            <p className="mt-3 text-[15px] leading-relaxed text-slate-300">
+              The whole path is in the app now, on the free tier. Start with a
+              demo scan if your adapter hasn't arrived yet.
+            </p>
             <a href="/app" className={ctaPrimary + " mt-6 w-full"}>
               Open the app
               <ArrowIcon />
             </a>
-          </li>
-        </ol>
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -574,12 +596,16 @@ function annualSavingPercent(annualCents: number, monthlyCents: number) {
 
 function Pricing() {
   return (
-    <section id="pricing" className="bg-app-bg py-16 sm:py-24">
+    /* Fixed slate ground, not `bg-app-bg`: the marketing page is a light
+       document, so a themed surface token here would flip to the dark
+       theme's navy under a visitor's OS preference while the headings and
+       body copy around it stayed dark ink. */
+    <section id="pricing" className="bg-slate-100 py-16 sm:py-24">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <div className="im-reveal max-w-2xl">
           <div className="flex flex-wrap items-center gap-3">
             <Eyebrow>Pricing</Eyebrow>
-            <span className="rounded-full border border-line-strong bg-white px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider text-slate-600">
+            <span className="rounded-full border border-slate-300 bg-white px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider text-slate-600">
               Preview — not final
             </span>
           </div>
@@ -594,33 +620,51 @@ function Pricing() {
           </p>
         </div>
 
+        {/* M4: three PLATES, not three sales cards. Identical material,
+            identical legend, prices in mono with tabular figures so the three
+            bands line up digit for digit — which is the whole point of a
+            willingness-to-pay preview. Deliberately absent: any "most
+            popular" badge, any highlighted middle band, any countdown, any
+            checkout affordance. Every figure still comes from market.ts. */}
         <div className="im-reveal mt-12 grid gap-4 md:grid-cols-3">
           {PRICE_BANDS.map((band) => (
             <div
               key={band.id}
-              className="rounded-2xl border border-line bg-surface p-6 shadow-sm"
+              className="overflow-hidden rounded-plate border border-slate-200 bg-white"
             >
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                Pro · annual band
-              </p>
-              <p className="mt-3 text-4xl font-extrabold tracking-tight text-navy-950">
-                {formatBandAnnual(band)}
-                <span className="text-lg font-semibold text-slate-500">
-                  {" "}
-                  /year
-                </span>
-              </p>
-              <p className="mt-2 text-sm text-slate-600">
-                or {formatBandMonthly(band)}/month — about{" "}
-                {annualSavingPercent(band.annualCents, band.monthlyCents)}% less
-                paid annually
-              </p>
+              <div className="border-b border-slate-200 px-5 py-3">
+                <p className="label-micro text-slate-500">Pro · annual band</p>
+              </div>
+              <div className="px-5 py-5">
+                <p className="num font-mono text-[2.5rem] font-bold leading-none tracking-tight text-navy-950">
+                  {formatBandAnnual(band)}
+                </p>
+                <p className="mt-2 text-sm font-semibold text-slate-500">
+                  per year
+                </p>
+              </div>
+              <Plate
+                className="border-t border-slate-200"
+                items={[
+                  {
+                    label: "Monthly",
+                    value: `${formatBandMonthly(band)}/month`,
+                  },
+                  {
+                    label: "Paid annually",
+                    value: `about ${annualSavingPercent(
+                      band.annualCents,
+                      band.monthlyCents,
+                    )}% less`,
+                  },
+                ]}
+              />
             </div>
           ))}
         </div>
 
         <div className="im-reveal mt-6 grid gap-4 lg:grid-cols-2">
-          <div className="rounded-2xl border border-line bg-surface p-6 shadow-sm">
+          <div className="rounded-card border border-slate-200 bg-white p-6">
             <h3 className="text-base font-bold text-navy-950">
               Pro surfaces already in the app
             </h3>
@@ -632,7 +676,7 @@ function Pricing() {
             <ul className="mt-4 space-y-2.5">
               {PRO_BUILT.map((item) => (
                 <li key={item} className="flex items-start gap-2.5">
-                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand/25 text-brand-fg">
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-200 text-amber-800">
                     <TickIcon className="h-3 w-3" />
                   </span>
                   <span className="text-[15px] leading-snug text-slate-700">
@@ -642,7 +686,7 @@ function Pricing() {
               ))}
             </ul>
           </div>
-          <div className="rounded-2xl border border-line bg-surface p-6 shadow-sm">
+          <div className="rounded-card border border-slate-200 bg-white p-6">
             <h3 className="text-base font-bold text-navy-950">
               What we intend to add
             </h3>
@@ -655,7 +699,7 @@ function Pricing() {
                 <li key={item} className="flex items-start gap-2.5">
                   <span
                     aria-hidden
-                    className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-line-strong"
+                    className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-slate-300"
                   />
                   <span className="text-[15px] leading-snug text-slate-700">
                     {item}

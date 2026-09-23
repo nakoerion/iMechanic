@@ -27,7 +27,14 @@ export function PhoneFrame({
   return (
     <div
       className={cn(
-        "mx-auto w-full max-w-[21.5rem] rounded-[2.25rem] border border-white/15 bg-navy-900 p-2.5 shadow-2xl shadow-black/50",
+        /* M2: the frame gains the same "backlit bezel" the app's surfaces got
+           in A2/A6 — a 1px inset `--ui-bezel` rim along the top edge, so light
+           reads as catching the handset's chrome. The raw `--ui-bezel` var is
+           used (not the `--color-bezel` theme alias) because Tailwind only
+           emits a theme variable a utility actually references, and this is an
+           arbitrary shadow value. The drop shadow is `shadow-2xl`'s own
+           geometry, inlined so both live in one box-shadow. */
+        "mx-auto w-full max-w-[21.5rem] rounded-[2.25rem] border border-white/15 bg-navy-900 p-2.5 shadow-[0_25px_50px_-12px_rgb(0_0_0/0.5),inset_0_1px_0_var(--ui-bezel)]",
         className,
       )}
     >
