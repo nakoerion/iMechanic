@@ -1411,3 +1411,37 @@ fill, but the *border* is under the 3:1 non-text threshold — worth a separate 
 - Not independently re-checked here: the desktop **dark** `/app` home (the same components are
   covered by the dark repair panel and the dark vehicles pass), and no screen was exercised
   through a real OBD2/Pro flow — this slice is material/markup only.
+
+## M6 — app-store listing assets (produced, not uploaded) — 2026-09-23
+
+Store upload is still blocked on S7 (owner's Android/iOS accounts); this slice
+produces the artwork only. **No app code, token or copy was touched** — the
+screenshots are captures of the production build, nothing else.
+
+- `design/store/01-today.png` … `07-codes-read-demo-labelled.png` — seven
+  **1080×2340** (360×780 CSS @3× device-pixel) dark-theme frames: Today,
+  Connect your adapter, free severity verdict lamp, DIY-vs-workshop cost
+  decision, guided repair (step rail), Pro preview bands, and the "Codes read"
+  area that keeps the in-app **"Demo scan — simulated data, not a real car"**
+  badge and the VIN plate in frame.
+- Captured with `agent-browser` against the built output served on a spare port
+  (the managed dev server owns :3000), forcing dark via
+  `set media dark` + `localStorage['imechanic.theme']='dark'` and hiding the
+  headless scrollbar with a capture-time stylesheet (never a repo change).
+  Screens behind auth were reached with a throwaway session minted per the
+  `verify-authed-app-screen` skill; **both throwaway users were deleted and the
+  orphan count is 0** for vehicles/scans/sessions/subscriptions.
+- The Pro user used for the gated shots was made Pro with a `subscriptions` row
+  (`status='active'`), which is what `hasActivePro` reads — no Stripe call.
+- `design/feature-graphic.svg` + `design/feature-graphic-1024x500.png` — the
+  Google Play feature graphic, drawn and rasterised **deterministically** by
+  `scripts/gen-feature-graphic.mjs` (mirrors `scripts/gen-og.mjs`: navy-950
+  ground, 3.5% technical grid, horizon glow, backlit bezel hairline, amber tile
+  + engine brand mark, the hero's own headline, a phone frame holding the real
+  verdict words and the real sample code P0301). No new copy, price or claim.
+- Both live in `design/`, never `public/` (AGENTS.md). Sources are
+  reproducible: `bun scripts/gen-feature-graphic.mjs`.
+- Verified: `bunx tsc --noEmit` 0 errors, `bun run build` clean,
+  `bun run test` → **198 passed / 16 skipped** (3 DB suites still abort on the
+  missing `TEST_DATABASE_URL`). Every PNG checked with `file` at its stated
+  dimensions.
