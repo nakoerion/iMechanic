@@ -1445,3 +1445,62 @@ screenshots are captures of the production build, nothing else.
   `bun run test` → **198 passed / 16 skipped** (3 DB suites still abort on the
   missing `TEST_DATABASE_URL`). Every PNG checked with `file` at its stated
   dimensions.
+
+## BLE notification fix + demo-rail pacing — 2026-09-23 (branch `fix/ble-notify-and-demo-rail`)
+
+Two independent fixes. No copy, price, severity, gating or clear-codes change.
+
+### 1. Web Bluetooth never subscribed to notifications (real defect, S3)
+
+`src/obd/elm327-live.ts` only ever **removed** the characteristic's
+`characteristicvaluechanged` listener (in `close()`, with a `void onNotify;`
+hiding the unused symbol) and **never added** it, so a real BLE adapter's
+replies were dropped: the read buffer stayed empty and `readUntilPrompt()`
+waited out its full 8s timeout — a Web Bluetooth scan could not get past its
+first `ATZ`. Web Serial (reader pump) and the native bridge (`write()`
+round-trips) were unaffected, which is why the A5 tests never caught it.
+
+- `bleTransport()` subscribes **before any command can be written**, and
+  `writeLine()` awaits a one-shot `ensureNotifications()` that starts
+  notifications (an idempotent repeat of the connect probe's call) and reports
+  a characteristic that cannot notify as an honest `ObdError`.
+- `close()` stays symmetric: `removeEventListener` + `stopNotifications`.
+- `bleTransport` and the new `BleCharacteristicLike` type are exported so the
+  transport can be driven by a fake characteristic — the same convention
+  `nativeBleTransport` already follows. No new dependency.
+- New `tests/ble-notify.test.ts` (5 tests): a fake adapter that fires real
+  `characteristicvaluechanged` events in 20-byte ATT packets (and 4-byte
+  packets, proving reassembly across events) completes a whole connect + read
+  scan, tears down symmetrically, and a silent adapter still fails honestly
+  with the lost-link error rather than an empty-but-successful scan.
+  Mutation-checked: with the `addEventListener` line removed, 4 of the 5 tests
+  fail by timing out — the exact pre-fix symptom.
+- Unchanged: the shared pump design, the Web Serial path, the native path.
+
+### 2. Demo ignition rail was invisible (A5 polish)
+
+`src/routes/app/scan.tsx`'s `onDemoScan` resolved in microtasks, so the four
+rail steps ran inside a single frame: "Initialise" was never shown as active at
+all (the code jumped `connect` → `read`). Each step is now set through a
+`showStep()` helper that holds it for `DEMO_STEP_MS` (450 ms), so the rail
+observably walks Connect → Initialise → Read → Interpret. `holdDemoStep()` is a
+no-op under `prefers-reduced-motion: reduce`, and the live-hardware path is
+untouched — it still advances only on real adapter events via the driver's
+transcript observer.
+
+### Verified
+
+- `bunx tsc --noEmit` 0 errors; `bun run build` clean; `bun run test` →
+  **203 passed / 16 skipped** (198 + the 5 new BLE tests; the 3 DB suites still
+  abort on the missing `TEST_DATABASE_URL`, as expected).
+- Browser pass against the **built output** on a spare port with a throwaway
+  session (per the `verify-authed-app-screen` skill), **390x844, dark**: the
+  rail's `li[aria-current="step"]` was sampled every 60 ms through a demo scan
+  — CONNECT ~180–600 ms, INITIALISE ~660–1020 ms, READ ~1080–1500 ms,
+  INTERPRET ~1560–3180 ms, then idle (~3.1 s total, ~450 ms per step). Before
+  fix 2 only CONNECT/READ/INTERPRET ever flashed past. `agent-browser console`
+  and `agent-browser errors` were both **empty**. The throwaway user was
+  deleted afterwards.
+- The managed dev server on :3000 was not answering in this session, so the
+  screens were served from `dist/` by a throwaway runner in `/tmp` (never a
+  repo file, per the skill).
