@@ -113,6 +113,20 @@ export function Note({
 /*   - tone="light" → the white page ground: slate/navy palette values.   */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Motif 2 ("backlit bezel") for the marketing ground: one lit hairline along
+ * the top edge of a panel, so light reads as catching the instrument's rim.
+ *
+ * A fixed 12% white — which is the DARK value of `--ui-bezel` — for the same
+ * reason the `Plate` below uses fixed alphas: the marketing sections paint on
+ * navy that never flips, while the themed token resolves to SOLID white in the
+ * light theme, i.e. a bright white line on navy. Inset, so it hugs the border
+ * box and needs no extra markup. Decorative and non-text: like every bezel in
+ * `app.css` it is deliberately below the 3:1 threshold (1.4:1 on navy) and
+ * nothing is ever conveyed by it alone.
+ */
+export const bezelTop = "shadow-[inset_0_1px_0_rgb(255_255_255/0.12)]";
+
 export type PlateItem = {
   label: string;
   value: ReactNode;

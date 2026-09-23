@@ -8,7 +8,7 @@ import { FaultCodeCard } from "../severity/fault-code-card";
 import { VerdictPanel } from "../severity/verdict-panel";
 import { PhoneFrame } from "./phone-frame";
 import { SAMPLE_CAPTION, SAMPLE_SCAN, SAMPLE_STOP_DRIVING } from "./sample-data";
-import { Note, SectionHeader, TickIcon } from "./ui";
+import { bezelTop, Note, SectionHeader, TickIcon } from "./ui";
 
 /**
  * ProductShowcase — the landing page's centre of gravity.
@@ -23,10 +23,25 @@ import { Note, SectionHeader, TickIcon } from "./ui";
  *   - free surfaces (verdict, code cards) carry no lock, blur or Pro badge;
  *   - Pro surfaces are described as Pro, and Pro is described as not yet
  *     switched on for billing — no "start today and get X".
+ *
+ * M5 material: this section was the last pre-redesign surface on the page. It
+ * carried the blurred amber blob (the default 2021 SaaS gradient) and stacked
+ * its panes on `bg-white/5` rounded-3xl boxes, neither of which exists in the
+ * instrument language. It now paints on the same ground as the hero — motif 8
+ * (the 3.5% technical grid) plus the low horizon glow — and its panels are the
+ * navy-900 plate material with motif 2's lit top rim, at the design system's
+ * own radii (`--radius-card` / `--radius-plate`) instead of `rounded-3xl`.
+ *
+ * The screens themselves needed no work: every pane renders the REAL app
+ * components, so A1–A7 (mono machine data, telltale lamps, plates, the dark
+ * elevation pass) arrived here automatically. Not one word of copy changed.
  */
 
 type TabId = "verdict" | "decide" | "repair";
 
+/** `screen` is the name the app's own header shows; it is passed straight into
+ *  the PhoneFrame status bar so the tab and the frame cannot disagree (it used
+ *  to be declared here and hard-coded a second time inside each pane). */
 const TABS: { id: TabId; label: string; screen: string }[] = [
   { id: "verdict", label: "Scan & verdict", screen: "Scan result" },
   { id: "decide", label: "Cost decision", screen: "Decide" },
@@ -53,10 +68,10 @@ function Bullets({ items }: { items: string[] }) {
   );
 }
 
-function VerdictPane() {
+function VerdictPane({ screen }: { screen: string }) {
   return (
     <>
-      <PhoneFrame label="Scan result" screenLabel="Sample scan result screen">
+      <PhoneFrame label={screen} screenLabel="Sample scan result screen">
         <VerdictPanel severity="repair_soon" codeCount={SAMPLE_SCAN.length} />
         {SAMPLE_SCAN.map((c) => (
           <FaultCodeCard key={c.code} {...c} />
@@ -78,7 +93,7 @@ function VerdictPane() {
   );
 }
 
-function DecidePane() {
+function DecidePane({ screen }: { screen: string }) {
   const [country, setCountry] = useState<CountryCode>("DE");
   const estimate = estimateCosts("ignition", country, {
     codes: SAMPLE_SCAN.map((c) => ({ code: c.code, status: c.status })),
@@ -87,7 +102,7 @@ function DecidePane() {
 
   return (
     <>
-      <PhoneFrame label="Decide" screenLabel="Sample cost decision screen">
+      <PhoneFrame label={screen} screenLabel="Sample cost decision screen">
         <CostDecisionCard
           family={estimate.family}
           currency={estimate.currency}
@@ -141,10 +156,10 @@ function DecidePane() {
   );
 }
 
-function RepairPane() {
+function RepairPane({ screen }: { screen: string }) {
   return (
     <>
-      <PhoneFrame label="Act" screenLabel="Sample guided repair screen" tall>
+      <PhoneFrame label={screen} screenLabel="Sample guided repair screen" tall>
         <GuidedRepairPanel family="ignition" />
       </PhoneFrame>
       <div className="space-y-6">
@@ -182,9 +197,24 @@ export function ProductShowcase() {
       id="product"
       className="relative overflow-hidden bg-navy-950 py-16 text-white sm:py-24"
     >
+      {/* M5 ground — the same two decorative layers as the hero, defined in
+          app.css: motif 8's 3.5% hairline technical grid (self-masking, so it
+          fades out before the section edges) and one low amber horizon glow.
+          This replaces the blurred amber blob. Both are pure decoration on the
+          fixed navy ground and carry nothing a reader needs. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute -top-32 left-1/2 h-96 w-[48rem] -translate-x-1/2 rounded-full bg-amber-400/10 blur-3xl"
+        className="im-techgrid pointer-events-none absolute inset-0"
+      />
+      <div
+        aria-hidden
+        className="im-horizon pointer-events-none absolute inset-x-0 bottom-0 h-[22rem]"
+      />
+      {/* Motif 2: the lit top rim, so the section reads as the next panel in
+          the cluster rather than more page. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/10"
       />
       <div className="relative mx-auto max-w-6xl px-4 sm:px-6">
         <SectionHeader
@@ -199,11 +229,16 @@ export function ProductShowcase() {
           </p>
         </SectionHeader>
 
-        {/* Tabs */}
+        {/* Tabs — a hardware switch rail: the plate material and radius, with
+            the lit rim, instead of a translucent white pill. Type size and tap
+            targets are unchanged (≥48px, `min-h-tap`). */}
         <div
           role="tablist"
           aria-label="App screens"
-          className="im-reveal mt-10 flex flex-wrap gap-2 rounded-control border border-white/10 bg-white/5 p-2"
+          className={cn(
+            "im-reveal mt-10 flex flex-wrap gap-1.5 rounded-plate border border-white/10 bg-navy-900 p-1.5",
+            bezelTop,
+          )}
         >
           {TABS.map((item, i) => {
             const active = item.id === tab;
@@ -221,7 +256,7 @@ export function ProductShowcase() {
                 onKeyDown={(e) => onKeyDown(e, i)}
                 onClick={() => setTab(item.id)}
                 className={cn(
-                  "min-h-tap flex-1 rounded-[0.6rem] px-4 text-sm font-bold transition-colors sm:flex-none sm:px-6",
+                  "min-h-tap flex-1 rounded-[0.3125rem] px-4 text-sm font-bold transition-colors sm:flex-none sm:px-6",
                   active
                     ? "bg-brand text-on-brand"
                     : "text-slate-300 hover:bg-white/10 hover:text-white",
@@ -242,9 +277,9 @@ export function ProductShowcase() {
             hidden={item.id !== tab}
             className="im-reveal mt-8 grid items-start gap-10 lg:grid-cols-[minmax(0,22.5rem)_1fr] lg:gap-14"
           >
-            {item.id === "verdict" && <VerdictPane />}
-            {item.id === "decide" && <DecidePane />}
-            {item.id === "repair" && <RepairPane />}
+            {item.id === "verdict" && <VerdictPane screen={item.screen} />}
+            {item.id === "decide" && <DecidePane screen={item.screen} />}
+            {item.id === "repair" && <RepairPane screen={item.screen} />}
           </div>
         ))}
 
@@ -252,8 +287,16 @@ export function ProductShowcase() {
           {SAMPLE_CAPTION} {PRO_NOTE}
         </Note>
 
-        {/* The three answers, rendered with the real verdict component. */}
-        <div className="im-reveal mt-16 rounded-3xl border border-white/10 bg-white/5 p-5 sm:p-8">
+        {/* The three answers, rendered with the real verdict component. The
+            panel is the plate material at the system's own card radius — the
+            old `rounded-3xl` + `bg-white/5` box belonged to no material in the
+            design system. */}
+        <div
+          className={cn(
+            "im-reveal mt-16 rounded-card border border-white/10 bg-navy-900 p-5 sm:p-8",
+            bezelTop,
+          )}
+        >
           <h3 className="text-2xl font-extrabold tracking-tight text-white">
             One of three answers. Every single time.
           </h3>

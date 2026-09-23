@@ -1,6 +1,13 @@
 import { HeadContent, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
 import { useEffect } from "react";
 import type { ReactNode } from "react";
+import {
+  OG_IMAGE_ALT,
+  OG_IMAGE_HEIGHT,
+  OG_IMAGE_URL,
+  OG_IMAGE_WIDTH,
+  SITE_ORIGIN,
+} from "~/lib/site";
 import { themeInitScript, themeDataAttrs } from "~/lib/theme";
 import appCss from "~/styles/app.css?url";
 
@@ -36,6 +43,28 @@ export const Route = createRootRoute({
           "AI root-cause diagnosis, an honest severity verdict, a DIY-vs-workshop cost decision, and step-by-step guided repairs. Reading codes and clearing them is free, always.",
       },
       { property: "og:type", content: "website" },
+      { property: "og:url", content: SITE_ORIGIN },
+      { property: "og:site_name", content: "iMechanic" },
+      /* M1 — the share card. Until now every shared link rendered as a blank
+         rectangle. `og:image` must be ABSOLUTE (crawlers drop relative paths),
+         hence the constant in `src/lib/site.ts`. The art is generated from the
+         real tokens and glyphs by `bun scripts/gen-og.mjs`; `design/og.svg` is
+         its vector master. Twitter needs its own pair plus the card type, or it
+         falls back to a small thumbnail. */
+      { property: "og:image", content: OG_IMAGE_URL },
+      { property: "og:image:width", content: OG_IMAGE_WIDTH },
+      { property: "og:image:height", content: OG_IMAGE_HEIGHT },
+      { property: "og:image:type", content: "image/png" },
+      { property: "og:image:alt", content: OG_IMAGE_ALT },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "iMechanic — From fault code to completed repair" },
+      {
+        name: "twitter:description",
+        content:
+          "AI root-cause diagnosis, an honest severity verdict, a DIY-vs-workshop cost decision, and step-by-step guided repairs. Reading codes and clearing them is free, always.",
+      },
+      { name: "twitter:image", content: OG_IMAGE_URL },
+      { name: "twitter:image:alt", content: OG_IMAGE_ALT },
       /* iOS home-screen installs (QA defect D16): without these an
          iPhone install opens in Safari chrome instead of standalone.
          `black-translucent` lets our navy pt-safe header own the
