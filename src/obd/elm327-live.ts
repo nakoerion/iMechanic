@@ -30,25 +30,26 @@
  * and pulling a dependency for them would bloat the bundle for two
  * feature-detected calls. Only the members the driver uses are declared. */
 
+/**
+ * The members of a BLE characteristic the driver uses. Exported so the BLE
+ * line transport can be built from a fake characteristic in tests (the same
+ * convention `nativeBleTransport` follows for the native bridge).
+ */
+export type BleCharacteristicLike = {
+  startNotifications(): Promise<unknown>;
+  stopNotifications(): Promise<unknown>;
+  writeValue(data: BufferSource): Promise<void>;
+  addEventListener(type: string, listener: (event: Event) => void): void;
+  removeEventListener(type: string, listener: (event: Event) => void): void;
+};
+
 type BluetoothDeviceLike = {
   name?: string | null;
   gatt?: {
     connected: boolean;
     connect(): Promise<{
       getPrimaryService(uuid: string): Promise<{
-        getCharacteristic(uuid: string): Promise<{
-          startNotifications(): Promise<unknown>;
-          stopNotifications(): Promise<unknown>;
-          writeValue(data: BufferSource): Promise<void>;
-          addEventListener(
-            type: string,
-            listener: (event: Event) => void,
-          ): void;
-          removeEventListener(
-            type: string,
-            listener: (event: Event) => void,
-          ): void;
-        }>;
+        getCharacteristic(uuid: string): Promise<BleCharacteristicLike>;
       }>;
     } | null>;
   };
@@ -107,19 +108,14 @@ export type LineTransport = {
 };
 
 /** Byte-level line transport over a BLE UART characteristic. */
-function bleTransport(
+export function bleTransport(
   device: BluetoothDeviceLike,
-  characteristic: {
-    startNotifications(): Promise<unknown>;
-    stopNotifications(): Promise<unknown>;
-    writeValue(data: BufferSource): Promise<void>;
-    addEventListener(type: string, listener: (event: Event) => void): void;
-    removeEventListener(type: string, listener: (event: Event) => void): void;
-  },
+  characteristic: BleCharacteristicLike,
 ): LineTransport {
   const decoder = new TextDecoder();
   let buffer = "";
   let waiter: ((text: string) => void) | null = null;
+  let notificationsStarted = false;
 
   function onNotify(event: Event) {
     const view = (event as unknown as { target?: { value?: ArrayBufferView } })
@@ -136,10 +132,44 @@ function bleTransport(
     }
   }
 
+  /* Web Bluetooth only delivers `characteristicvaluechanged` to a listener
+     that is actually attached to the characteristic, and it drops the
+     notifications for one nobody listens to. This listener is the whole
+     receive path: without it the buffer stays empty and every read waits out
+     its timeout — a real BLE scan could not get past its first `ATZ`. It was
+     removed in `close()` and never added, so subscribe here, before any
+     command can be written. */
+  characteristic.addEventListener("characteristicvaluechanged", onNotify);
+
+  /**
+   * Notifications have to be running as well as subscribed. `connectBluetooth()`
+   * starts them while probing candidate characteristic pairs (so a pair that
+   * cannot notify is skipped rather than chosen); this is the transport's own
+   * guarantee that it works when built without that probe. Web Bluetooth
+   * treats a repeat `startNotifications()` as a no-op.
+   */
+  async function ensureNotifications(): Promise<void> {
+    if (notificationsStarted) return;
+    try {
+      await characteristic.startNotifications();
+    } catch {
+      characteristic.removeEventListener(
+        "characteristicvaluechanged",
+        onNotify,
+      );
+      throw new ObdError(
+        "Could not listen to the adapter's Bluetooth channel.",
+        liveHint(),
+      );
+    }
+    notificationsStarted = true;
+  }
+
   return {
     kind: "bluetooth",
     name: device.name ?? "Bluetooth adapter",
     async writeLine(line: string) {
+      await ensureNotifications();
       const data = new TextEncoder().encode(`${line}\r`);
       await characteristic.writeValue(data);
       await new Promise((r) => setTimeout(r, WRITE_CHUNK_DELAY_MS));
@@ -172,9 +202,9 @@ function bleTransport(
         "characteristicvaluechanged",
         onNotify,
       );
+      notificationsStarted = false;
       await characteristic.stopNotifications().catch(() => undefined);
       if (device.gatt?.connected) device.gatt.connect().catch(() => undefined);
-      void onNotify;
     },
   };
 }
