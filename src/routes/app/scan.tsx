@@ -71,6 +71,28 @@ type Phase =
    own full log). */
 const TRANSCRIPT_BUFFER = 6;
 
+/* How long each ignition-sequence step is held on the demo path. The demo
+   driver answers in microtasks, so without a pause the rail's four steps run
+   inside one frame: the sequence is invisible without hardware and
+   "Initialise" never appears as the active step at all. The live-hardware path
+   keeps stepping on real adapter events and is deliberately NOT paced. */
+const DEMO_STEP_MS = 450;
+
+/** True when the visitor asked the OS for stillness. */
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
+
+/** Hold a demo step long enough to be seen — never for reduced-motion users. */
+function holdDemoStep(ms = DEMO_STEP_MS): Promise<void> {
+  if (prefersReducedMotion()) return Promise.resolve();
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 const SOURCE_BADGE: Record<ScanSource, string> = {
   demo: t.resultDemoBadge,
   manual: t.resultManualBadge,
@@ -181,23 +203,28 @@ function AppScan() {
 
   async function onDemoScan() {
     setTranscript([]);
-    setPhase({ kind: "working", label: t.demoRunning, step: "connect" });
+    /* The demo adapter's connect() IS its simulated handshake
+       (`demo-simulator.ts`: "Simulated handshake: no transport, nothing to
+       fail"), so Initialise is complete the moment it returns. The label stays
+       "Reading demo codes…" throughout — the demo button's own loading state
+       keys off this exact label. Each step is held briefly so the rail is
+       observably walked (see DEMO_STEP_MS). */
+    const showStep = async (step: ScanStep) => {
+      setPhase({ kind: "working", label: t.demoRunning, step });
+      await holdDemoStep();
+    };
     try {
       // NOTE: no demoDriver.reset() here. A cleared demo adapter must READ
       // EMPTY on the next demo scan — that is the re-scan-verify flow QA
       // checks ("clear codes, then re-scan → honest empty state"). reset()
       // is only used by tests and by the S5 verify flow when the demo car's
       // faults are deliberately restored.
+      await showStep("connect");
       await demoDriver.connect();
-      /* A5: the demo adapter's connect() IS its simulated handshake
-         (`demo-simulator.ts`: "Simulated handshake: no transport, nothing to
-         fail"), so Initialise is complete the moment it returns. The label
-         stays "Reading demo codes…" throughout — the rail carries the finer
-         procedure detail, and the demo button's own loading state keys off
-         this exact label. */
-      setPhase({ kind: "working", label: t.demoRunning, step: "read" });
+      await showStep("initialise");
+      await showStep("read");
       const result = await demoDriver.readCodes();
-      setPhase({ kind: "working", label: t.demoRunning, step: "interpret" });
+      await showStep("interpret");
       const ok = await persistScan("demo", result);
       if (ok) setPhase({ kind: "idle" });
     } catch {
