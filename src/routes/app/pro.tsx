@@ -20,6 +20,13 @@ export const Route = createFileRoute("/app/pro")({
  *
  * `ProUpgradePanel` owns the three honest states (already Pro / free with
  * Stripe / free without Stripe) so this screen has no branching of its own.
+ *
+ * S9a — in the Android shell `ProUpgradePanel` renders plan status only, with no
+ * band, no price, no checkout and no link (Google Play — see
+ * `src/native/android-shell.ts`). The two cards above it stay: what is free,
+ * and what Pro adds. Neither names a price or a place to pay, so nothing on this
+ * screen is a purchase entry point; the list is what explains the locked
+ * features the user meets elsewhere in the app.
  */
 function AppPro() {
   const entitlement = useEntitlement();

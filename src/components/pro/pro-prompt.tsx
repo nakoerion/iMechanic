@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { SparkIcon, SpinnerIcon } from "../icons";
 import { Button } from "../ui/button";
 import { APP_COPY } from "../../lib/copy";
+import { useCanShowPurchaseUi } from "../../native/android-shell";
 
 /**
  * ProUpgradePrompt — the ONE paywall surface in the app (S6b).
@@ -19,6 +20,13 @@ import { APP_COPY } from "../../lib/copy";
  * `compact` drops the free-tier reassurance for places where the full card would
  * be too heavy (e.g. inside the vehicle picker) — it is a layout choice only,
  * never a way to hide what Pro costs or what stays free.
+ *
+ * S9a (Google Play) — in the Android shell `useCanShowPurchaseUi()` is false, so
+ * the card renders WITHOUT the link: the feature, its title and its description
+ * are unchanged ("AI root cause is part of iMechanic Pro"), but there is no
+ * price, no Upgrade action and no way through to a purchase. Every gate in the
+ * app goes through this component, so the boundary holds in one place. The
+ * entitlement itself is untouched: a web buyer keeps full Pro access.
  */
 export function ProUpgradePrompt({
   title,
@@ -34,6 +42,9 @@ export function ProUpgradePrompt({
   className?: string;
 }) {
   const t = APP_COPY.pro;
+  /* S9a — false on the server, on the first client render, and forever in the
+     Android app; true only once we know we are in a browser or the iOS shell. */
+  const canShowPurchaseUi = useCanShowPurchaseUi();
   return (
     <section
       aria-label={t.eyebrow}
@@ -65,13 +76,15 @@ export function ProUpgradePrompt({
           {t.freeNote}
         </p>
       )}
-      <Link
-        to="/app/pro"
-        className="mt-3 inline-flex min-h-11 items-center justify-center gap-1.5 rounded-control border-2 border-line-strong bg-surface px-4 text-sm font-semibold text-fg transition-colors hover:bg-surface-sunken"
-      >
-        <SparkIcon className="h-4 w-4 text-brand-strong" aria-hidden />
-        {t.cta}
-      </Link>
+      {canShowPurchaseUi && (
+        <Link
+          to="/app/pro"
+          className="mt-3 inline-flex min-h-11 items-center justify-center gap-1.5 rounded-control border-2 border-line-strong bg-surface px-4 text-sm font-semibold text-fg transition-colors hover:bg-surface-sunken"
+        >
+          <SparkIcon className="h-4 w-4 text-brand-strong" aria-hidden />
+          {t.cta}
+        </Link>
+      )}
     </section>
   );
 }

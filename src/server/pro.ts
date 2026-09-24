@@ -8,6 +8,7 @@
  * never links it.
  */
 import { createServerFn } from "@tanstack/react-start";
+import { isAndroidShellUserAgent } from "../native/runtime";
 import { PRICE_BANDS } from "../lib/market";
 import type { BandId } from "./stripe-catalog";
 
@@ -44,6 +45,14 @@ function stripeTestMode(): boolean {
  *  - catalogue not filled in for that band → "checkout is not configured yet"
  * No price is ever hard-coded here; the Stripe price created from
  * `PRICE_BANDS` is looked up by band id.
+ *
+ * S9a (Google Play) — defence in depth. The Android shell appends
+ * `iMechanicAndroid` to its User-Agent (see `capacitor.config.ts`), and the
+ * Android WebView never renders a purchase entry point at all. If a checkout is
+ * requested from that app anyway (a stale bundle, or a hand-made request), the
+ * server refuses it here with a plain sentence. iMechanic has no Play Billing,
+ * so there is no compliant way to sell inside the Android app, and inventing
+ * one silently would be worse than refusing.
  */
 export const createCheckoutSession = createServerFn({ method: "POST" })
   .validator((input: unknown) => {
@@ -57,6 +66,14 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
   .handler(async ({ data: { bandId } }) => {
     if (!stripeConfigured()) {
       throw new Error("Pro checkout is not configured yet.");
+    }
+    /* Server-only header accessor (the same `@tanstack/react-start/server`
+       module `auth-core.ts` gets its cookie helpers from), loaded inside the
+       handler so the client bundle never links it — the bundle-boundary rule
+       this file already follows for the Stripe SDK. */
+    const { getRequestHeaders } = await import("@tanstack/react-start/server");
+    if (isAndroidShellUserAgent(getRequestHeaders().get("user-agent"))) {
+      throw new Error("Purchases are not available in the Android app.");
     }
     const { createCheckoutSessionCore } = await import("./pro-checkout");
     return createCheckoutSessionCore(bandId);

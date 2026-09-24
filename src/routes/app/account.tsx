@@ -10,6 +10,7 @@ import { APP_COPY } from "../../lib/copy";
 import { useEntitlement, type EntitlementHandle } from "../../lib/entitlement";
 import { MARKET_LIST, type CountryCode } from "../../lib/market";
 import { clientSignOutAndClearCache } from "../../lib/session";
+import { useIsAndroidShell } from "../../native/android-shell";
 import {
   getCurrentUser,
   updateCountry,
@@ -37,6 +38,10 @@ function AppAccount() {
   const [signingOut, setSigningOut] = useState(false);
   const { checkout } = Route.useSearch();
   const entitlement = useEntitlement();
+  /* S9a — these two notes belong to a Stripe redirect, and the Android app has
+     no checkout. `false` until the platform is known, so the browser keeps the
+     notes exactly as before and the Android shell never renders them. */
+  const isAndroidShell = useIsAndroidShell();
 
   useEffect(() => {
     let cancelled = false;
@@ -147,8 +152,10 @@ function AppAccount() {
       <ScreenHeader title={APP_COPY.account.title} description={APP_COPY.account.description} />
 
       {/* Returning from Stripe Checkout. These notes never assert an
-          entitlement — the plan block right below reads the real status. */}
-      {checkout === "success" && (
+          entitlement — the plan block right below reads the real status.
+          S9a: not rendered in the Android shell, where a checkout cannot
+          happen (and a hand-typed URL must not conjure a checkout note). */}
+      {checkout === "success" && !isAndroidShell && (
         <p
           role="status"
           className="flex items-start gap-2 rounded-card border border-line bg-surface p-4 text-sm leading-relaxed text-fg-muted shadow-card"
@@ -157,7 +164,7 @@ function AppAccount() {
           {APP_COPY.account.checkoutSuccess}
         </p>
       )}
-      {checkout === "canceled" && (
+      {checkout === "canceled" && !isAndroidShell && (
         <p
           role="status"
           className="flex items-start gap-2 rounded-card border border-line bg-surface p-4 text-sm leading-relaxed text-fg-muted shadow-card"

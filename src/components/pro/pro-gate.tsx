@@ -15,6 +15,11 @@ import { PlanUnknownNote, ProUpgradePrompt } from "./pro-prompt";
  * the Pro surfaces here are read-only rendering of data the user already owns,
  * so nothing is exposed that a UI check could leak. Server-side gating of the
  * Pro *actions* (e.g. the AI call) is a separate concern, tracked for the lead.
+ *
+ * S9a (Google Play): nothing extra happens here — the gate's only paywall
+ * surface is `ProUpgradePrompt`, which drops its link to the purchase screen
+ * inside the Android shell. Free users still get the honest "this is part of
+ * iMechanic Pro" card, and Pro users are unaffected.
  */
 export function ProGate({
   entitlement,

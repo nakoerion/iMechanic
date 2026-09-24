@@ -71,6 +71,16 @@ const config: CapacitorConfig = {
   android: {
     backgroundColor: "#070d18",
     allowMixedContent: false,
+    /**
+     * S9a — every request the Android shell makes is tagged with this token, so
+     * the server can tell the app apart from a browser. It backs the Google Play
+     * boundary twice over: the app itself renders no purchase entry point (see
+     * `src/native/android-shell.ts`) and `createCheckoutSession` refuses a
+     * checkout carrying this User-Agent (`isAndroidShellUserAgent` in
+     * `src/native/runtime.ts`). Play does not allow the app to sell, or to steer
+     * to buying, a digital subscription outside Play Billing.
+     */
+    appendUserAgent: "iMechanicAndroid",
   },
   plugins: {
     /**
