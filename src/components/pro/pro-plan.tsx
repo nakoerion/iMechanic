@@ -12,6 +12,7 @@ import {
 } from "../../lib/market";
 import type { EntitlementHandle } from "../../lib/entitlement";
 import { createCheckoutSession } from "../../server/pro";
+import { useCanShowPurchaseUi } from "../../native/android-shell";
 
 const t = APP_COPY.pro;
 const a = APP_COPY.account;
@@ -33,6 +34,13 @@ const a = APP_COPY.account;
  *
  * No price is written here: every figure comes from `PRICE_BANDS` via
  * `formatBandAnnual` / `formatBandMonthly` (AGENTS.md — pricing rule).
+ *
+ * S9a — inside the Android shell (`useCanShowPurchaseUi()` false, which is also
+ * the value before the platform is known) this panel shows PLAN STATUS ONLY:
+ * Free or Pro, with no bands, no prices, no checkout and no link to buy. Google
+ * Play forbids selling a digital subscription outside Play Billing, and
+ * iMechanic ships no Play Billing. Pro users are unaffected — `getEntitlement()`
+ * is untouched, so a web buyer keeps full Pro access in the app.
  */
 export function ProUpgradePanel({
   entitlement,
@@ -40,6 +48,7 @@ export function ProUpgradePanel({
   entitlement: EntitlementHandle;
 }) {
   const { state, reload } = entitlement;
+  const canShowPurchaseUi = useCanShowPurchaseUi();
 
   if (state.kind === "loading") {
     return (
@@ -67,6 +76,29 @@ export function ProUpgradePanel({
 
   const { pro, status, stripeConfigured, stripeTestMode } = state.entitlement;
   if (pro) return <ProStatusCard entitlement={entitlement} />;
+
+  /* S9a — plan status only: no bands, no prices, no checkout, no link. */
+  if (!canShowPurchaseUi) {
+    return (
+      <section className="rounded-card border border-line bg-surface p-5 shadow-card">
+        <h2 className="text-sm font-bold text-fg">{a.planHeading}</h2>
+        <p className="mt-1 text-base font-semibold text-fg">{a.planFreeName}</p>
+        <p className="mt-1 text-sm leading-relaxed text-fg-muted">
+          {a.planFreeBody}
+        </p>
+        {status && (
+          /* A subscription that exists but does not grant Pro (past_due,
+             canceled…) — said plainly, as everywhere else in the app. */
+          <p className="mt-2 rounded-card border border-warn-border bg-warn-fill p-3 text-xs leading-relaxed text-warn-fg">
+            {a.planStatus[status]}
+          </p>
+        )}
+        <p className="mt-3 text-xs leading-relaxed text-fg-subtle">
+          {t.androidPlanNote}
+        </p>
+      </section>
+    );
+  }
 
   return (
     <section className="rounded-card border border-line bg-surface p-5 shadow-card">
@@ -206,6 +238,12 @@ function BandPrice({ band }: { band: PriceBand }) {
  * Current subscription status — rendered only when the user IS Pro (the server
  * said so). Every field comes from the server; a missing renewal date says so
  * instead of inventing one.
+ *
+ * S9a — in the Android shell the card shows the status and renewal date but not
+ * the band/price line nor the billing note: an existing subscription must not
+ * put a price (or a route to a billing portal) in front of a Play user. The
+ * entitlement itself is unchanged — this user is still Pro and still has every
+ * Pro feature.
  */
 export function ProStatusCard({
   entitlement,
@@ -214,6 +252,7 @@ export function ProStatusCard({
   entitlement: EntitlementHandle;
   showManageNote?: boolean;
 }) {
+  const canShowPurchaseUi = useCanShowPurchaseUi();
   if (entitlement.state.kind !== "ready") return null;
   const { pro, status, bandId, currentPeriodEnd } =
     entitlement.state.entitlement;
@@ -229,18 +268,20 @@ export function ProStatusCard({
         <CheckIcon className="h-4 w-4" aria-hidden />
         {status ? a.planStatus[status] : a.planStatus.active}
       </p>
-      <p className="mt-1 text-sm leading-relaxed text-ok-fg">
-        {bandId
-          ? `${a.planBand(bandId)} — ${formatBandAnnual(
-              PRICE_BANDS.find((b) => b.id === bandId) ?? PRICE_BANDS[0]!,
-            )} ${t.annualSuffix}`
-          : a.planBandUnknown}
-      </p>
+      {canShowPurchaseUi && (
+        <p className="mt-1 text-sm leading-relaxed text-ok-fg">
+          {bandId
+            ? `${a.planBand(bandId)} — ${formatBandAnnual(
+                PRICE_BANDS.find((b) => b.id === bandId) ?? PRICE_BANDS[0]!,
+              )} ${t.annualSuffix}`
+            : a.planBandUnknown}
+        </p>
+      )}
       <p className="mt-0.5 text-xs leading-relaxed text-ok-fg">
         {status === "trialing" ? a.planTrialEnds : a.planRenews}:{" "}
         {formatPlanDate(currentPeriodEnd) ?? a.planPeriodEnd}
       </p>
-      {showManageNote && (
+      {showManageNote && canShowPurchaseUi && (
         <p className="mt-2 text-xs leading-relaxed text-ok-fg">
           {a.planManageNote}
         </p>
@@ -275,8 +316,13 @@ export function formatPlanDate(value: string | null): string | null {
  * upgrade surface. `statusNote` carries an honest one-liner when a subscription
  * exists but does not grant Pro (e.g. a failed payment) — the user is told why
  * rather than just being offered an upgrade.
+ *
+ * S9a — in the Android shell the "See iMechanic Pro" link is not rendered, and
+ * nothing replaces it: the card states the plan and what stays free, which is
+ * the whole point of it. No price is shown here either way.
  */
 export function FreePlanCard({ statusNote }: { statusNote?: string | null }) {
+  const canShowPurchaseUi = useCanShowPurchaseUi();
   return (
     <section className="rounded-card border border-line bg-surface p-5 shadow-card">
       <h2 className="text-sm font-bold text-fg">{a.planHeading}</h2>
@@ -289,13 +335,15 @@ export function FreePlanCard({ statusNote }: { statusNote?: string | null }) {
           {statusNote}
         </p>
       )}
-      <Link
-        to="/app/pro"
-        className="mt-3 inline-flex min-h-11 items-center justify-center gap-1.5 rounded-control border-2 border-line-strong bg-surface px-4 text-sm font-semibold text-fg transition-colors hover:bg-surface-sunken"
-      >
-        <SparkIcon className="h-4 w-4 text-brand-strong" aria-hidden />
-        {a.planUpgradeCta}
-      </Link>
+      {canShowPurchaseUi && (
+        <Link
+          to="/app/pro"
+          className="mt-3 inline-flex min-h-11 items-center justify-center gap-1.5 rounded-control border-2 border-line-strong bg-surface px-4 text-sm font-semibold text-fg transition-colors hover:bg-surface-sunken"
+        >
+          <SparkIcon className="h-4 w-4 text-brand-strong" aria-hidden />
+          {a.planUpgradeCta}
+        </Link>
+      )}
     </section>
   );
 }

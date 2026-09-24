@@ -368,6 +368,15 @@ export const APP_COPY = {
     freeNote:
       "Reading codes, the severity verdict and clearing codes stay free — always.",
     cta: "See iMechanic Pro",
+    /* S9a — the Android shell (Google Play). The app is published inside a
+       WebView and Play does not allow it to sell or steer to a digital
+       subscription outside Play Billing, so the Android build shows no band, no
+       price, no Upgrade action, no link and no URL — the plan status comes from
+       the server (`getEntitlement()`), unchanged. This is the one extra line it
+       gets there. Nothing in this block may ever name a price, a place to pay,
+       a portal or an address. */
+    androidPlanNote:
+      "Reading codes, the severity verdict and clearing codes stay free — always.",
     checking: "Checking your plan…",
     checkError:
       "We couldn't check your plan just now, so Pro features stay hidden for the moment. Your free verdict and codes are unaffected.",

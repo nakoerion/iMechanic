@@ -1504,3 +1504,73 @@ transcript observer.
 - The managed dev server on :3000 was not answering in this session, so the
   screens were served from `dist/` by a throwaway runner in `/tmp` (never a
   repo file, per the skill).
+
+## S9a — Google Play payments compliance (engineer, branch `s9a-play-payments-compliance`) — 2026-09-23
+
+**Why.** The Android app is the published web app inside a Capacitor WebView.
+Play policy does not allow an app to sell a digital subscription (or steer the
+user to buy one) through anything but Play Billing, and iMechanic ships no Play
+Billing. So the Android build simply never offers a purchase: no band, no price,
+no Upgrade action, no link, no URL. **Entitlement is untouched** —
+`getEntitlement()` / `hasActivePro()` are unchanged, so a user who bought on the
+web keeps full Pro access inside the app; only the *selling* surfaces change.
+
+**One decision point.** New module `src/native/android-shell.ts`:
+`canShowPurchaseUi(platform)` is an explicit **allow-list** (`"ios" | "web"` →
+true; `"android"`, `null` and anything unrecognised → false),
+`useCanShowPurchaseUi()` / `useIsAndroidShell()` are the hooks every purchase
+surface calls, and `platformAfterMount()` is the post-mount half, split out and
+exported so it is unit-testable without a DOM. Detection itself is not
+duplicated: `nativePlatform()` in `native/runtime.ts` still owns it.
+
+**Hydration (#418) rule.** The server cannot see `window.Capacitor`, so
+`useDetectedPlatform()` returns `null` until mount. Server render and first
+client render therefore both hide purchase UI and stay byte-identical; after
+mount ios/web allow it and android still hides it. Hidden is the safe default in
+both directions — no Buy button can flash in the Play build. Nothing on the web
+changes visibly: every purchase surface already waits for `useEntitlement()`'s
+fetch before it renders.
+
+**What the Android shell renders instead** (all gated through the one hook):
+- `ProUpgradePrompt` (S6b — the single gate every locked feature goes through):
+  the feature, its title and its description are unchanged ("AI root cause is
+  part of iMechanic Pro", plus the free-tier reassurance); the "See iMechanic
+  Pro" link is dropped. No price, nothing to click.
+- `ProUpgradePanel` (`/app/pro`): **plan status only** — Free or Pro, the Pro
+  feature list, an existing-but-inactive status if there is one, and
+  `t.androidPlanNote`. No bands, no prices, no checkout, no link. The two cards
+  above it stay because neither names a price or a place to pay.
+- `ProStatusCard` (a user who IS Pro): status and renewal date only — no
+  band/price line and no billing note, since a Play user must not be handed a
+  price or a route to a billing portal.
+- `FreePlanCard`: the upgrade link is dropped; the card keeps stating the plan
+  and what stays free.
+- `Account`: the `?checkout=success` / `?checkout=canceled` notes are not
+  rendered (a hand-typed URL must not conjure a checkout note in an app that has
+  no checkout).
+
+**Defence in depth (server).** `capacitor.config.ts` appends
+`appendUserAgent: "iMechanicAndroid"` to every request the Android shell makes.
+`isAndroidShellUserAgent()` (`native/runtime.ts`) is the pure, `window`-free,
+case-insensitive server mirror of that token, and `createCheckoutSession`
+(`server/pro.ts`) reads it via `getRequestHeaders().get("user-agent")` and
+refuses with "Purchases are not available in the Android app." That is the
+backstop for a stale bundle or a hand-made request — a client-side check alone
+would not be enough.
+
+**Tests** — `tests/android-shell.test.ts`, **17 new pure tests**: the allow-list
+(including unknown values), the User-Agent matcher (real WebView UA, mixed case,
+missing header, browser UA, "Android" without the token, and a `Headers`
+instance — the same accessor the handler uses), `platformAfterMount` against a
+faked injected `Capacitor` (android / ios / absent / unrecognised), the SSR
+first-render contract via `renderToString` (hidden even when the shell is
+asking), and a config-drift guard asserting `capacitor.config.ts` appends
+exactly `ANDROID_SHELL_USER_AGENT`. No DOM environment and no new dependency:
+the client hook is three lines over `platformAfterMount()`, which is the tested
+contract — `@testing-library/react` / `react-dom/test-utils` are not installed
+and were not added for it.
+
+**Verified.** `bunx tsc --noEmit` → 0 errors. `bun run test` → **226 passed /
+16 skipped** (209 + the 17 new); the 3 DB-backed suites still cannot start
+without `TEST_DATABASE_URL` (owner-gated, pre-existing — unchanged by this
+slice). `bun run build` → clean.

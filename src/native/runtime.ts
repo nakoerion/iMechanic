@@ -63,6 +63,33 @@ export function isNativeRuntime(): boolean {
 }
 
 /**
+ * The User-Agent token the Android shell appends to every request it makes
+ * (`appendUserAgent` in `capacitor.config.ts`, slice S9a).
+ *
+ * It exists because the Android WebView is the one client that must not show a
+ * purchase entry point (Google Play forbids selling a digital subscription
+ * through anything but Play Billing), and a client-side check alone is not
+ * defence in depth: the server has to be able to recognise the app too.
+ */
+export const ANDROID_SHELL_USER_AGENT = "iMechanicAndroid";
+
+/**
+ * Does this User-Agent belong to the Android shell? Deliberately pure and
+ * server-safe — unlike the rest of this module it never touches `window`, so
+ * `src/server/pro.ts` can use it to refuse a purchase that the app itself
+ * cannot legally offer. Case-insensitive, and `null`/`undefined` (no
+ * User-Agent header at all) is simply "not the Android app".
+ */
+export function isAndroidShellUserAgent(
+  userAgent: string | null | undefined,
+): boolean {
+  if (typeof userAgent !== "string") return false;
+  return userAgent
+    .toLowerCase()
+    .includes(ANDROID_SHELL_USER_AGENT.toLowerCase());
+}
+
+/**
  * Is the `iMechanicBle` plugin registered in this shell? Optimistic when the
  * runtime does not expose the check — a missing plugin then fails with a
  * clear "not implemented" error from the bridge rather than being silently
