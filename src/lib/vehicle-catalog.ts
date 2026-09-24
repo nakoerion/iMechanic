@@ -264,9 +264,19 @@ export function isListedValue(options: readonly string[], value: string): boolea
   return key !== "" && options.some((option) => normalizeVehicleTerm(option) === key);
 }
 
-/** The newest model year the backend accepts: next calendar year. */
+/**
+ * The newest model year the backend accepts: next calendar year.
+ *
+ * The calendar is read in **UTC**, never the runtime's local zone. `getFullYear()`
+ * is a property of the runtime, not of the instant: on 2026-12-31T23:30Z a server
+ * in UTC still says 2026 while a browser in Berlin (UTC+1) already says 2027, so
+ * the two would disagree about the newest offered year (`…+1` = 2027 vs 2028) —
+ * a hydration mismatch (React #418) the moment the picker is server-rendered, and
+ * worse, the browser would offer a year the backend then refuses. Reading the
+ * instant in UTC makes both runtimes derive the same year from the same clock.
+ */
 export function maxVehicleYear(now: Date = new Date()): number {
-  return now.getFullYear() + 1;
+  return now.getUTCFullYear() + 1;
 }
 
 /**

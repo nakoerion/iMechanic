@@ -31,6 +31,7 @@ import {
   summariseScans,
   type ScanSummary,
 } from "../lib/scan-summary";
+import { maxVehicleYear } from "../lib/vehicle-catalog";
 import type { ObdTranscript } from "../obd/driver";
 
 const db = sql();
@@ -604,11 +605,14 @@ export async function createVehicleCore(
   const make = input.make.trim().slice(0, 80);
   const model = input.model.trim().slice(0, 80);
   if (!make || !model) throw new Error("Make and model are required.");
+  /* The same bound the picker offers, from the same function: `maxVehicleYear`
+     reads the year in UTC, so a browser ahead of UTC cannot suggest a year this
+     guard would then silently drop (`year` would become NULL on the INSERT). */
   const year =
     input.year === null ||
     !Number.isInteger(input.year) ||
     input.year < 1980 ||
-    input.year > new Date().getFullYear() + 1
+    input.year > maxVehicleYear()
       ? null
       : input.year;
   const rows = await db<{ id: string }[]>`

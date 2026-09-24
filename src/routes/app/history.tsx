@@ -175,7 +175,15 @@ function ScanRow({ scan }: { scan: ScanSummary }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-bold text-fg">
-            <time dateTime={scan.createdAt}>{formatWhen(scan.createdAt)}</time>
+            {/* Relative time is measured against the reader's clock, so the
+                server's string can be a minute behind the browser's ("3 min
+                ago" vs "4 min ago") — a #418 mismatch at a minute boundary.
+                Suppressed rather than deferred: the SSR text is real content
+                and must stay in the first paint. The absolute branch of
+                `formatWhen` is pinned to en-US/UTC, so it never differs. */}
+            <time dateTime={scan.createdAt} suppressHydrationWarning>
+              {formatWhen(scan.createdAt)}
+            </time>
           </p>
           {/* Source badge: a demo scan says so, in words, right next to the
               date it claims. Never dressed up as a reading from a real car. */}
