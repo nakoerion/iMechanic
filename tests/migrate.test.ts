@@ -6,15 +6,15 @@
  * applied there first, so a correct runner must be a clean no-op that exits
  * 0 — that IS the re-runnability guarantee.
  *
- * Guard placement: requireTestDbUrl() runs in beforeAll (not module scope),
- * so the unset-variable abort fails this suite's hooks instead of the whole
- * file — the pure unit suites in other files still run and pass.
+ * Guard placement: with no TEST_DATABASE_URL the suite SKIPS (so `bun run test`
+ * stays green), and requireTestDbUrl() still runs in beforeAll when it is set —
+ * so a URL pointed at production aborts inside this suite's hooks.
  */
 import { beforeAll, describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
 import { readdirSync } from "node:fs";
 import path from "node:path";
-import { requireTestDbUrl, testDb } from "./test-db";
+import { hasTestDbUrl, requireTestDbUrl, testDb } from "./test-db";
 
 const siteDir = path.join(import.meta.dirname, "..");
 /* Derived from the migrations dir, not hardcoded (S1.2): the ledger must
@@ -27,6 +27,8 @@ let url: string;
 let db: ReturnType<typeof testDb>;
 
 beforeAll(() => {
+  // No test database → the suite below SKIPs.
+  if (!hasTestDbUrl()) return;
   url = requireTestDbUrl(); // throws the clear abort message when unset
   db = testDb();
 });
@@ -42,7 +44,7 @@ function runMigrate() {
   });
 }
 
-describe("D3 — migration runner", () => {
+describe.skipIf(!hasTestDbUrl())("D3 — migration runner", () => {
   it("is safely re-runnable: skips applied files and exits 0 (run twice)", () => {
     for (const run of [1, 2]) {
       const res = runMigrate();

@@ -297,3 +297,248 @@ export async function signOutCore(): Promise<{ ok: true }> {
   clearSessionCookie();
   return { ok: true };
 }
+
+/* ------------------------------------------------------------------ */
+/* Account deletion — slice S9c (Google Play requirement)              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Everything in Stripe a deletion has to act on before any row is removed.
+ *
+ * `stripeSubscriptionIds` holds only subscriptions that can still bill
+ * (the terminal statuses `canceled` / `incomplete_expired` are filtered out by
+ * the reader, because cancelling them again would be a no-op against Stripe).
+ * `stripeCustomerId` is kept even when no subscription id is known: Stripe may
+ * hold a subscription our webhook never wrote down, and the customer id is the
+ * only way to find it. Either field may be null.
+ */
+export type DeleteAccountStripeRefs = {
+  stripeSubscriptionIds: string[];
+  stripeCustomerId: string | null;
+};
+
+/** What a completed deletion removed. Counts only, never a row's content. */
+export type DeleteAccountSummary = {
+  email: string;
+  stripeSubscriptionIds: string[];
+  waitlistRows: number;
+  loginTokens: number;
+};
+
+/**
+ * The side effects of a deletion, as an explicit seam. The real ones are built
+ * by `defaultDeleteAccountPorts()`; unit tests pass their own so the
+ * orchestration (order, aborts, re-check) is provable with no database, no
+ * Stripe key and no network — the same injection pattern `runAiDiagnosis`
+ * uses for `fetchImpl`.
+ *
+ * Order is the contract, not an implementation detail: Stripe first, the
+ * user row LAST. Every step before the user-row delete is reversible or empty;
+ * the cascade is the point of no return.
+ */
+export type DeleteAccountPorts = {
+  /** The signed-in user, or null. */
+  currentUser: () => Promise<AuthUser | null>;
+  /** Stripe handles on the user's rows (subscriptions + customer id). */
+  stripeRefsFor: (userId: string) => Promise<DeleteAccountStripeRefs>;
+  /**
+   * Cancel every billable Stripe subscription for these refs, IMMEDIATELY
+   * (not at period end). Must THROW when any cancellation genuinely failed —
+   * the caller then deletes nothing.
+   */
+  cancelStripeSubscription: (refs: DeleteAccountStripeRefs) => Promise<void>;
+  /** Remove the user's global rows (waitlist, login_tokens) and the user row. */
+  purgeAccount: (
+    userId: string,
+    email: string,
+  ) => Promise<{ waitlistRows: number; loginTokens: number }>;
+  /** Clear the session cookie on the response. */
+  clearSessionCookie: () => void;
+};
+
+/** Statuses where Stripe can still charge. Everything else is terminal. */
+const BILLABLE_SUBSCRIPTION_STATUSES = [
+  "trialing",
+  "active",
+  "past_due",
+  "incomplete",
+] as const;
+
+/** A Stripe object that is already gone cannot be charged and is not a failure. */
+function isMissingStripeResource(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { code?: unknown }).code === "resource_missing"
+  );
+}
+
+/**
+ * Cancel every billable subscription for the user, immediately.
+ *
+ * Real Stripe implementation of the `cancelStripeSubscription` port. The SDK is
+ * imported DYNAMICALLY so `auth-core.ts` keeps its static graph (node:crypto +
+ * the cookie helpers) and stays importable from a plain unit test.
+ *
+ * Three honest failure modes, all of which must abort the deletion rather than
+ * let the row disappear while a subscription keeps charging:
+ *  - no Stripe key configured while a subscription exists → `stripeClient()`
+ *    throws;
+ *  - the network/API call fails → rethrown;
+ *  - an unknown code → rethrown.
+ * A `resource_missing` error is NOT a failure: Stripe has already forgotten the
+ * subscription, so there is nothing left to charge.
+ */
+async function cancelStripeForAccount(
+  refs: DeleteAccountStripeRefs,
+): Promise<void> {
+  const { stripeClient } = await import("./stripe");
+  const stripe = stripeClient();
+
+  const ids = new Set(refs.stripeSubscriptionIds);
+
+  // The customer is the belt-and-braces route: a subscription that exists in
+  // Stripe but never reached our table would otherwise keep billing.
+  if (refs.stripeCustomerId) {
+    const list = await stripe.subscriptions.list({
+      customer: refs.stripeCustomerId,
+      status: "all",
+      limit: 100,
+    });
+    for (const sub of list.data) {
+      if ((BILLABLE_SUBSCRIPTION_STATUSES as readonly string[]).includes(sub.status)) {
+        ids.add(sub.id);
+      }
+    }
+  }
+
+  for (const id of ids) {
+    try {
+      // `cancel` (immediate) — never `update({ cancel_at_period_end: true })`,
+      // which would leave a charge pending after the account is gone.
+      await stripe.subscriptions.cancel(id);
+    } catch (error) {
+      if (isMissingStripeResource(error)) continue;
+      throw error;
+    }
+  }
+}
+
+/**
+ * Remove the user's rows: the two GLOBAL tables that hold the email address,
+ * then the `users` row itself, whose ON DELETE CASCADE removes sessions,
+ * vehicles, scans, scan_codes, diagnoses, repair_steps, repair_jobs,
+ * repair_job_steps and subscriptions (verified against db/migrations/001_init
+ * and 002_s1_1_integrity).
+ *
+ * `login_tokens` is the one table the cascade does NOT reach: it is keyed by
+ * email and has no `user_id` column at all, so it must be deleted explicitly —
+ * otherwise a magic-link row holding the deleted address would survive forever.
+ * `waitlist` is the other deliberate global exception (marketing signups).
+ * `stripe_events` is deliberately untouched: it stores only Stripe's own event
+ * ids and a timestamp, no personal data.
+ *
+ * The user row goes last so that a failure in either global-table delete leaves
+ * the account intact and retryable rather than half-erased.
+ */
+async function purgeAccountData(
+  userId: string,
+  email: string,
+): Promise<{ waitlistRows: number; loginTokens: number }> {
+  const loginTokens = await db<{ token_hash: string }[]>`
+    DELETE FROM login_tokens WHERE email = ${email} RETURNING token_hash`;
+  const waitlistRows = await db<{ email: string }[]>`
+    DELETE FROM waitlist WHERE email = ${email} RETURNING email`;
+  await db`DELETE FROM users WHERE id = ${userId}`;
+  return { waitlistRows: waitlistRows.length, loginTokens: loginTokens.length };
+}
+
+/** Read the Stripe handles worth cancelling for this user. Never guesses. */
+async function stripeRefsForUser(
+  userId: string,
+): Promise<DeleteAccountStripeRefs> {
+  const rows = await db<{ stripe_customer_id: string | null }[]>`
+    SELECT stripe_customer_id FROM users WHERE id = ${userId} LIMIT 1`;
+  const subs = await db<{ stripe_subscription_id: string | null }[]>`
+    SELECT stripe_subscription_id FROM subscriptions
+    WHERE user_id = ${userId}
+      AND stripe_subscription_id IS NOT NULL
+      AND status IN ('trialing','active','past_due','incomplete')`;
+  return {
+    stripeSubscriptionIds: subs
+      .map((row) => row.stripe_subscription_id)
+      .filter((id): id is string => typeof id === "string" && id.length > 0),
+    stripeCustomerId: rows[0]?.stripe_customer_id ?? null,
+  };
+}
+
+/** The production ports: real database, real Stripe, real cookie. */
+export function defaultDeleteAccountPorts(): DeleteAccountPorts {
+  return {
+    currentUser: () => resolveCurrentUser(),
+    stripeRefsFor: stripeRefsForUser,
+    cancelStripeSubscription: cancelStripeForAccount,
+    purgeAccount: purgeAccountData,
+    clearSessionCookie,
+  };
+}
+
+/**
+ * Delete the signed-in user's account and everything stored against it.
+ *
+ * The typed email is re-checked HERE, against the session's own address, no
+ * matter what the client already validated — the browser's check is a
+ * convenience, this one is the rule.
+ *
+ * Sequence, and why it is this sequence:
+ *  1. require a session, and require the typed address to match it exactly
+ *     (after the same trim+lowercase normalisation every other email path uses;
+ *     addresses are stored lowercase, so a typed "User@Example.com" must not
+ *     behave differently from "user@example.com");
+ *  2. cancel every billable Stripe subscription IMMEDIATELY. A failure here
+ *     ABORTS the whole thing with an honest error and deletes NOTHING — a user
+ *     must never end up with no account and a subscription still charging;
+ *  3. remove the waitlist row and the magic-link rows for that address;
+ *  4. delete the `users` row and let the ON DELETE CASCADE take the rest;
+ *  5. clear the session cookie.
+ */
+export async function deleteAccountCore(
+  typedEmail: unknown,
+  ports: DeleteAccountPorts = defaultDeleteAccountPorts(),
+): Promise<DeleteAccountSummary> {
+  const user = await ports.currentUser();
+  if (!user) throw new Error("Sign in to delete your account.");
+
+  const typed = normaliseEmail(typedEmail);
+  if (!typed || typed !== normaliseEmail(user.email)) {
+    throw new Error(
+      "That email address does not match the account you are signed in with. Nothing was deleted.",
+    );
+  }
+
+  const refs = await ports.stripeRefsFor(user.id);
+  if (refs.stripeSubscriptionIds.length > 0 || refs.stripeCustomerId) {
+    try {
+      await ports.cancelStripeSubscription(refs);
+    } catch (error) {
+      const detail =
+        error instanceof Error && error.message
+          ? ` Stripe reported: ${error.message.slice(0, 200)}`
+          : "";
+      throw new Error(
+        "Your Pro subscription could not be cancelled, so your account was NOT deleted and nothing has been removed." +
+          detail,
+      );
+    }
+  }
+
+  const removed = await ports.purgeAccount(user.id, user.email);
+  ports.clearSessionCookie();
+
+  return {
+    email: user.email,
+    stripeSubscriptionIds: refs.stripeSubscriptionIds,
+    waitlistRows: removed.waitlistRows,
+    loginTokens: removed.loginTokens,
+  };
+}

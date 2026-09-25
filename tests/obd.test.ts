@@ -6,7 +6,7 @@
  * and deletes every row it creates.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { testDb } from "./test-db";
+import { hasTestDbUrl, testDb } from "./test-db";
 import {
   decodeDtcPair,
   encodeDtcPair,
@@ -193,15 +193,18 @@ describe("live transcript log (R3, pure — no hardware, no DB)", () => {
   });
 });
 
-describe("scan persistence validation (isolated test database)", () => {
-  // Lazy: testDb() throws the clear abort when TEST_DATABASE_URL is unset,
-  // and that must fail only this block's hooks — never the pure suites above.
+describe.skipIf(!hasTestDbUrl())(
+  "scan persistence validation (isolated test database)",
+  () => {
+  // Lazy: with no TEST_DATABASE_URL this whole block SKIPS (never fails the
+  // run) and the pure suites above always run.
   let db: ReturnType<typeof testDb>;
   const tag = `s3val-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
   const email = `s3-validation-${tag}@test.invalid`;
   let userId: string;
 
   beforeAll(async () => {
+    if (!hasTestDbUrl()) return; // no test database → this block skips
     db = testDb();
     const [u] = await db.query("INSERT INTO users (email) VALUES ($1) RETURNING id", [
       email,

@@ -9,11 +9,15 @@ import { getCurrentUser } from "../../server/auth";
 export const Route = createFileRoute("/app")({
   beforeLoad: async ({ location }) => {
     // Route protection (Slice S2): the whole /app tree requires a session —
-    // except the two public auth surfaces /app/signin and /app/verify, which
-    // are the way IN. Authenticated SSR and client navigations both run this.
+    // except the public auth surfaces /app/signin and /app/verify, which are the
+    // way IN, and /app/account-deleted (S9c), which is where a user lands the
+    // moment their session has just been deleted. Requiring a session there
+    // would bounce a successfully deleted account to the sign-in screen.
+    // Authenticated SSR and client navigations both run this.
     if (
       location.pathname.startsWith("/app/signin") ||
-      location.pathname.startsWith("/app/verify")
+      location.pathname.startsWith("/app/verify") ||
+      location.pathname.startsWith("/app/account-deleted")
     ) {
       return;
     }

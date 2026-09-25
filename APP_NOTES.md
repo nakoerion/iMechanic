@@ -1648,3 +1648,66 @@ each legal page carries its own `<title>`, the placeholders appear as
 `{{...}}`, and the landing footer + sign-in screen really do link all three
 pages. Browser QA of the pages (390x844 and desktop, both themes) is QA's pass,
 not claimed here.
+
+## S9c — in-app account deletion (Google Play requirement)
+
+The app now deletes an account and everything held against it, in-app, on web,
+iOS and Android alike. Public page `/delete-account` describes the finished flow
+and the email route for users who can no longer sign in.
+
+- **Server.** `deleteAccount` server fn (`src/server/auth.ts`, thin stub, dynamic
+  import) → `deleteAccountCore(typedEmail, ports)` in `src/server/auth-core.ts`
+  (logic, unit-testable). Order: require a session → re-check the typed email
+  against the session's own address server-side → cancel every billable Stripe
+  subscription IMMEDIATELY (`subscriptions.cancel`, never
+  `cancel_at_period_end`) → delete `waitlist` + `login_tokens` for that address →
+  delete the `users` row (ON DELETE CASCADE) → clear the session cookie. A failed
+  Stripe cancel ABORTS with an honest error and deletes NOTHING.
+- **Ports seam.** `DeleteAccountPorts` (`currentUser`, `stripeRefsFor`,
+  `cancelStripeSubscription`, `purgeAccount`, `clearSessionCookie`) with
+  `defaultDeleteAccountPorts()` for production — the same injection pattern as
+  `runAiDiagnosis`'s `fetchImpl`, so `tests/delete-account.test.ts` (12 tests)
+  runs with no database, no Stripe key and no network. A `resource_missing`
+  Stripe error is treated as already-cancelled, not as a failure.
+- **login_tokens is NOT reached by the cascade.** It is keyed by `email` and has
+  no `user_id` column, so it is deleted explicitly — otherwise a magic-link row
+  holding the deleted address would survive forever. `waitlist` (the other global
+  table) likewise. `stripe_events` is deliberately left alone: it holds Stripe's
+  own event ids + a timestamp and no personal data (verified by reading the
+  migration).
+- **Live verification (run against the real database, all fixtures removed
+  afterwards).** A throwaway user with a session, login token, waitlist row,
+  vehicle, scan, scan code, diagnosis, repair step, repair job + job step, and an
+  active subscription was purged through the real ports: every single table went
+  to 0, the `stripe_events` row survived, and the Stripe refs handed to the
+  cancel step were the right subscription id + customer id. A global FK sweep
+  also showed all 8 tables with a `user_id` column carry `ON DELETE CASCADE`, and
+  zero orphans across every parent/child pair.
+- **Webhook safety (no new guard needed, deliberately).** `upsertSubscription`
+  only ever matches a user through the local `users` table (customer id, or the
+  `metadata.userId`/`client_reference_id` we set ourselves, re-verified by
+  `SELECT ... FROM users`). After a deletion both lookups miss, so a late Stripe
+  event returns `{written:false, reason:"no-user"}`, is logged and acked 200 —
+  nothing is written, and nothing here can create a user. `subscriptions.user_id`
+  is `NOT NULL REFERENCES users(id) ON DELETE CASCADE`, so a resurrection is
+  impossible even if the matching were wrong.
+- **UI.** `Account` → a hazard-ruled DANGER ZONE (`DangerZone` in
+  `src/routes/app/account.tsx`): what is deleted (including the subscription),
+  the immediate-cancel sentence only when Pro is actually active, a type-your-
+  email confirmation gating the button, and the server's own error sentence on
+  failure (nothing is dimmed, hidden or teased). On success: service-worker
+  caches cleared and a full navigation to the new public-ish route
+  `/app/account-deleted` (exempt from the session guard in
+  `src/routes/app/route.tsx`), which states what was removed and that no further
+  charges are made.
+- **Copy/legal.** `/delete-account` (in-app first, email as the fallback),
+  `/privacy` retention + "Deleting your data" sections, `APP_COPY.account.
+  delete*` + `APP_COPY.accountDeleted`, and the two stale
+  `{{LAST_UPDATED}}` doc comments in `src/lib/legal.ts` /
+  `src/components/legal/legal-page.tsx`.
+- **Test-suite gate.** The DB-backed suites (`migrate`, `schema`, one `obd`
+  block) now `describe.skipIf(!hasTestDbUrl())` and their `beforeAll` hooks
+  return early, so `bun run test` is GREEN with no `TEST_DATABASE_URL` (they
+  skip: 16 skipped) instead of failing the run with a setup error. The safety
+  guard is unchanged: `requireTestDbUrl()` still refuses a missing variable or a
+  URL equal to `DATABASE_URL`.

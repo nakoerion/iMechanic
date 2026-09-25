@@ -1,16 +1,15 @@
 /**
  * /delete-account — the PUBLIC account-deletion URL Google Play requires
- * (slice S9b).
+ * (slice S9b, updated in S9c when the in-app flow shipped).
  *
  * Two things this page must do at once:
  *  1. satisfy the Play requirement — a public, signed-out URL that explains how
  *     a user deletes their account and their data; and
- *  2. stay honest. There is currently NO delete path in the codebase: the only
- *     thing the app deletes today is a session row on sign-out
- *     (`signOutCore`, src/server/auth-core.ts). The in-app "Account → Delete
- *     account" button is a LATER slice, so this page presents the route that
- *     works NOW (email) first and marks the in-app flow as "coming with the
- *     next release" rather than describing a button that does not exist.
+ *  2. stay honest. The in-app flow now EXISTS (`Account → Delete account`, see
+ *     `src/routes/app/account.tsx` + `deleteAccountCore` in
+ *     `src/server/auth-core.ts`), so it is presented FIRST as the route that
+ *     deletes everything straight away. The email route stays, because a user
+ *     who can no longer sign in must still be able to get deleted.
  */
 import { createFileRoute } from "@tanstack/react-router";
 import type { ReactNode } from "react";
@@ -72,7 +71,22 @@ function DeleteAccountPage() {
       }
     >
       <section className="mt-2 grid gap-5 md:grid-cols-2">
-        <RouteCard eyebrow="Works today" title="Delete by email">
+        <RouteCard eyebrow="Fastest" title="In the app: Account → Delete account">
+          <P>
+            Open iMechanic, go to <B>Account</B> and use the{" "}
+            <B>Delete account</B> block at the bottom of that screen. Type your
+            email address to confirm, press <B>Delete my account</B>, and your
+            account and its data are removed there and then — no waiting, no
+            request to approve.
+          </P>
+          <P>
+            If you have an active Pro subscription it is cancelled at the same
+            moment, so you are not charged again. You are signed out everywhere,
+            and the app confirms on a "your account has been deleted" screen.
+          </P>
+        </RouteCard>
+
+        <RouteCard eyebrow="If you cannot sign in" title="Delete by email">
           <P>
             Send an email from the address you sign in with — subject{" "}
             <B>&quot;{DELETE_SUBJECT}&quot;</B> — to{" "}
@@ -84,19 +98,8 @@ function DeleteAccountPage() {
           <P>
             We delete your account and everything stored against it, and reply to
             confirm it is done. Requests are normally handled within a few days,
-            and always within 30 days.
-          </P>
-        </RouteCard>
-
-        <RouteCard eyebrow="Coming with the next release" title="Account → Delete account">
-          <P>
-            Deleting your account from inside the app — <B>Account</B>, then{" "}
-            <B>Delete account</B> — is built in a following release. This page is
-            the public URL for that flow.
-          </P>
-          <P>
-            Until the button ships, use the email route: it does exactly the same
-            thing, and it is the route Play reviewers are pointed at today.
+            and always within 30 days. Use this route if you have lost access to
+            your mailbox and cannot sign in any more.
           </P>
         </RouteCard>
       </section>
@@ -115,7 +118,9 @@ function DeleteAccountPage() {
         <P>
           Deleting your account deletes everything stored against it. iMechanic's
           database is built so that one account deletion cascades to every
-          record, so nothing is left orphaned:
+          user-scoped record, and the two global tables that hold your address —
+          your sign-in links and any mailing-list signup — are removed in the same
+          step, so nothing is left behind:
         </P>
         <LegalList>
           <li>
@@ -138,8 +143,12 @@ function DeleteAccountPage() {
             your <B>sessions</B>, so you are signed out everywhere;
           </li>
           <li>
-            your <B>subscription record</B>, and we cancel any active Pro
-            subscription so you are not billed again;
+            your <B>subscription record</B>; an active Pro subscription is
+            cancelled at the same moment, immediately rather than at the end of
+            the billing period, so you are not billed again;
+          </li>
+          <li>
+            your <B>sign-in links</B> (magic-link records) for that address;
           </li>
           <li>
             any <B>mailing-list signup</B> you made on the marketing page.
@@ -157,8 +166,8 @@ function DeleteAccountPage() {
               "Tax and accounting law requires payment records to be kept, and they are held by Stripe rather than by iMechanic. Card details were never stored by us.",
             ],
             [
-              "Expired sign-in-link hashes",
-              "They hold no usable credential and expire in 15 minutes; we remove them on request.",
+              "Stripe webhook event ledger",
+              "Stripe's own event ids and their arrival times, kept so a duplicated webhook delivery cannot be applied twice. It holds no personal data at all — no name, no address, no car — so there is nothing there to identify you.",
             ],
           ]}
         />
@@ -172,9 +181,9 @@ function DeleteAccountPage() {
         <P>
           Deletion is permanent: your scan history and repair record go with the
           account and cannot be restored. Automated export is not built yet, so if
-          you want a copy of your data first, say so in the same email — you have
-          the right to a copy under the GDPR, and we will send it before anything
-          is removed.
+          you want a copy of your data first, ask us for it — you have the right
+          to a copy under the GDPR, and we will send it before anything is
+          removed.
         </P>
       </LegalSection>
 
