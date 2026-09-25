@@ -1,17 +1,31 @@
 ext {
+    // Slice S9d — Android 16 (API 36). minSdkVersion stays 23: the whole point
+    // of the product is a cheap adapter in an out-of-warranty car, and dropping
+    // Android 6 to gain nothing would only shrink the reachable fleet.
     minSdkVersion = 23
-    compileSdkVersion = 35
-    targetSdkVersion = 35
-    androidxActivityVersion = '1.9.2'
-    androidxAppCompatVersion = '1.7.0'
-    androidxCoordinatorLayoutVersion = '1.2.0'
-    androidxCoreVersion = '1.15.0'
-    androidxFragmentVersion = '1.8.4'
-    coreSplashScreenVersion = '1.0.1'
-    androidxWebkitVersion = '1.12.1'
+    compileSdkVersion = 36
+    targetSdkVersion = 36
+    // Slice S9d — the AndroidX versions Capacitor itself ships for API 36 (read
+    // off `android-template/variables.gradle` and
+    // `@capacitor/android@8.5.2/capacitor/build.gradle`). These are the versions
+    // that are built and tested against compileSdk 36; the previous set
+    // (androidxCore 1.15.0, androidxWebkit 1.12.1, androidxActivity 1.9.2)
+    // targets SDK 35. Capacitor 7's own build.gradle reads every one of these
+    // from `rootProject.ext`, so this file is the single place they are set.
+    androidxActivityVersion = '1.11.0'
+    androidxAppCompatVersion = '1.7.1'
+    androidxCoordinatorLayoutVersion = '1.3.0'
+    androidxCoreVersion = '1.17.0'
+    androidxFragmentVersion = '1.8.9'
+    coreSplashScreenVersion = '1.2.0'
+    androidxWebkitVersion = '1.14.0'
     junitVersion = '4.13.2'
-    androidxJunitVersion = '1.2.1'
-    androidxEspressoCoreVersion = '3.6.1'
+    androidxJunitVersion = '1.3.0'
+    androidxEspressoCoreVersion = '3.7.0'
+    // Slice S9d — deliberately NOT bumped to Capacitor 8's 14.0.1: cordova-android
+    // 13+ raises the library's minSdk to 24, which the manifest merger rejects
+    // against our minSdkVersion 23. 10.1.1 is what Capacitor 7 ships and it is a
+    // prebuilt AAR, so a newer compileSdk does not affect it.
     cordovaAndroidVersion = '10.1.1'
     // Slice S7: the Kotlin Gradle plugin version is NOT here. It must be readable
     // while the buildscript block is evaluated (before this file is applied), so it

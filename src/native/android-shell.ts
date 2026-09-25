@@ -1,6 +1,6 @@
 /**
  * The Google Play boundary (slice S9a) — the ONE place that decides whether
- * purchase UI may be rendered at all.
+ * purchase UI may be rendered at all — plus the shell's home link (slice S9d).
  *
  * Why this module exists: the Android app is the published web app inside a
  * Capacitor WebView, and Play policy forbids selling a digital subscription
@@ -76,4 +76,40 @@ export function useIsAndroidShell(): boolean {
  */
 export function useCanShowPurchaseUi(): boolean {
   return canShowPurchaseUi(useDetectedPlatform());
+}
+
+/**
+ * Where a "home" link points (slice S9d).
+ *
+ * The purchase boundary above keeps buying out of the Android app, but the
+ * marketing page still *carries* the pricing bands — they are public, and they
+ * have to be. So a home link tapped inside the Android app must not land on the
+ * landing page: it points at the app instead. Everywhere else (browser, PWA,
+ * iOS shell) "/" stays "/" and nothing changes.
+ *
+ * HYDRATION (React #418) — the same rule as the boundary, with the web answer as
+ * the pre-mount default. The server cannot see `window.Capacitor`, so:
+ *
+ *   server render + first client render → platform unknown → "/" (web answer)
+ *   after mount (useEffect)             → android → "/app"
+ *                                         web/ios → "/" (unchanged)
+ *
+ * The server HTML and the first client render are therefore byte-identical and
+ * no href can ever flash the wrong target in the other direction. A tap landing
+ * in the sub-frame window before the effect runs is not a concern: the mount
+ * effect runs before a finger can travel.
+ *
+ * Exported as a pure function so the decision is unit-testable without a DOM;
+ * the hook body is exactly this call.
+ */
+export function shellHomeHref(isAndroidShell: boolean): string {
+  return isAndroidShell ? "/app" : "/";
+}
+
+/**
+ * The hook form: `"/"` on the server, on the first client render, in the browser
+ * and in the iOS shell — and `"/app"` once we know we are in the Android app.
+ */
+export function useShellHomeHref(): string {
+  return shellHomeHref(useIsAndroidShell());
 }

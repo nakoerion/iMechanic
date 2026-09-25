@@ -1711,3 +1711,125 @@ and the email route for users who can no longer sign in.
   skip: 16 skipped) instead of failing the run with a setup error. The safety
   guard is unchanged: `requireTestDbUrl()` still refuses a missing variable or a
   URL equal to `DATABASE_URL`.
+
+## S9d — Play polish: the shell never reaches the pricing page + SDK 36 (engineer, branch `s9d-play-polish`) — 2026-09-25
+
+**Part 1 — inside the Android app, "home" is the app.** Play forbids selling a
+digital subscription outside Play Billing and forbids steering to a purchase. S9a
+removed every purchase *surface* from the shell, but the marketing page still
+carries the public pricing bands — so a home link tapped inside the app must not
+land there. Two links did: the legal pages' brand mark
+(`src/components/legal/legal-page.tsx`) and the 404's "Go to the homepage"
+(`src/routes/__root.tsx`). Those were the only two `href="/"` in `src/` (grepped).
+
+- `useShellHomeHref()` in `src/native/android-shell.ts` (over the pure
+  `shellHomeHref(isAndroidShell)`) applies the S9a hydration rule exactly: **the
+  server and the first client render produce the WEB answer "/"**, and only after
+  mount, only in the Android shell, does the href re-render to `"/app"`. The
+  pre-mount default is deliberately the *web* value, not the shell value — the
+  server cannot see `window.Capacitor`, so a pre-mount `/app` would be a React
+  #418 mismatch in the other direction and would break the home link for a plain
+  browser. Web, PWA and iOS are unchanged: `/` from the first byte.
+- The legal pages stay server-rendered, signed-out and complete in the HTML (no
+  new client state, no fetch), so a Play reviewer or a crawler sees the same page.
+- **4 new tests** in `tests/android-shell.test.ts` (17 → 21): the pure function
+  both ways; the SSR contract (renders `href="/"` and never `/app` even with
+  Capacitor injected as android); and a source-drift guard that fails if a
+  hard-coded `href="/"` reappears in either file.
+
+**Part 2 — compileSdk/targetSdk 35 → 36 (Android 16).**
+
+- `android/variables.gradle`: `compileSdkVersion = 36`, `targetSdkVersion = 36`,
+  **minSdkVersion stays 23** (a cheap adapter in an old car is the product).
+- AndroidX moved to the versions Capacitor itself ships for API 36, read off
+  `android-template/variables.gradle` and
+  `@capacitor/android@8.5.2/capacitor/build.gradle`: activity 1.11.0, appcompat
+  1.7.1, coordinatorlayout 1.3.0, core 1.17.0, fragment 1.8.9, core-splashscreen
+  1.2.0, webkit 1.14.0, androidTest junit 1.3.0, espresso 3.7.0. Capacitor 7.6.9
+  reads every one of these from `rootProject.ext`, so this file is the one place
+  they are set.
+- **Not** bumped: `cordovaAndroidVersion` stays 10.1.1. Capacitor 8 ships 14.0.1,
+  but cordova-android 13+ raises its own library `minSdk` to 24, which the
+  manifest merger rejects against our 23. It is a prebuilt AAR, so a newer
+  compileSdk does not affect it. Capacitor itself also stays on 7.6.9 — a major
+  upgrade is not this slice.
+- AGP 8.7.2 → **8.10.1**: Google's compatibility note for AGP 8.10
+  (`developer.android.com/build/releases/past-releases/agp-8-10-0-release-notes`)
+  states "the maximum API level that Android Gradle Plugin 8.10 supports is API
+  level 36"; 8.9 stops at 35. 8.10 still runs on the pinned Gradle 8.11.1
+  wrapper, so the bump costs no Gradle distribution change (Capacitor 8's 8.13
+  would force Gradle 8.13+).
+- `kotlinVersion` stays where S7 put it — `android/gradle.properties`, readable
+  before the `buildscript` block is evaluated.
+- Toolchain: this box only had platform 35, so
+  `sdkmanager --install "platforms;android-36" "build-tools;36.0.0"` was run
+  (exit 0; both present now).
+
+**Android 16 (API 36) behaviour changes that touch this app** — read from
+`developer.android.com/about/versions/16/behavior-changes-16` and
+`.../behavior-changes-all` on 2026-09-25:
+
+1. **Edge-to-edge opt-out is gone.** `windowOptOutEdgeToEdgeEnforcement` is
+   deprecated and disabled for targetSdk 36 apps on Android 16 devices. **No delta
+   for us:** `android/app/src/main/res/values/styles.xml` never set that attribute
+   (grep over `android/`: zero hits), so the WebView is *already* edge-to-edge
+   under targetSdk 35 on Android 15, and Capacitor 7's
+   `adjustMarginsForEdgeToEdge` default ("disable") behaves the same before and
+   after. Deliberately no config change — a blind change here would be an
+   unverifiable layout regression.
+2. **Predictive back is on by default** (targetSdk 36 + Android 16 device):
+   `onBackPressed` is no longer called and `KEYCODE_BACK` is not dispatched.
+   **We are unaffected today** — Capacitor 7.6.9's `BridgeActivity` overrides
+   neither `onBackPressed` nor registers an `OnBackInvokedCallback` (read the
+   installed source), and the app does not include `@capacitor/app`, so nothing of
+   ours listens for back. If `@capacitor/app` is ever added for the `backButton`
+   event, it must be a version already migrated to the new API.
+3. **Orientation / resizability / aspect-ratio restrictions are ignored on
+   displays with smallest width ≥ 600dp.** Our manifest sets no
+   `screenOrientation` and the PWA manifest is `orientation: any`, so nothing to
+   change; tablet/foldable layout still wants a device pass.
+4. **Bluetooth stack.** Improved bond-loss handling: on a failed re-auth the
+   system (not the app) disconnects the link, keeps the local bond and shows a
+   system dialog pointing at re-pairing; targetSdk 36 apps can additionally
+   receive `ACTION_KEY_MISSING` and `ACTION_ENCRYPTION_CHANGE`, and there is a new
+   public `removeBond(int)` via CompanionDeviceManager. For `IMechanicBlePlugin`
+   the practical consequence is that a lost bond now arrives as a disconnect plus
+   a system dialog rather than a silent re-pair, so a real adapter should be
+   re-tested on API 36 (the existing command timeout still turns a dead link into
+   an honest error rather than a hang).
+5. **Local Network Permission** (privacy): a new runtime permission gates LAN
+   traffic (raw sockets, mDNS/SSDP, `NsdManager`); opt-in in Android 16, enforced
+   in a later release. **Not applicable:** the OBD2 link is BLE, not LAN, and the
+   app makes no local-network calls. Worth knowing that a WebView's local-network
+   traffic inherits the host app's permission state.
+6. **No WebView-specific behaviour change** is listed for targetSdk 36 or for all
+   apps on Android 16 — the only WebView mention on either page is that
+   local-network inheritance note. (`elegantTextHeight` is deprecated; it is a
+   native-XML concern and we render no native text.)
+
+**Verification — and exactly what could not be verified.**
+
+- `bunx tsc --noEmit` → **0 errors**. (Needed
+  `NODE_OPTIONS=--max-old-space-size=700`; the unrestricted run was OOM-killed on
+  this box first. `bun run build` is `vite build` and strips types, so tsc is the
+  only type gate.)
+- `bun run test` → **242 passed / 16 skipped, exit 0** (`android-shell.test.ts`
+  17 → 21). The 2 DB-backed suites still skip without `TEST_DATABASE_URL`.
+- `bun run build` → clean, `BUILD_EXIT=0`.
+- Every version bumped was confirmed to exist in Google's Maven
+  (`dl.google.com/dl/android/maven2/.../*.pom` → **HTTP 200** for AGP 8.10.1 and
+  all nine AndroidX artifacts), and the "AGP 8.10 supports API 36" claim is
+  Google's own release note, not an inference.
+- **Gradle configuration proof: NOT achieved on this box.** `./gradlew :app:help
+  --no-daemon --max-workers=1 -Dorg.gradle.jvmargs=-Xmx900m` forked its single-use
+  daemon and the daemon was **killed before it finished configuring**: "Gradle
+  build daemon disappeared unexpectedly (it may have been killed or may have
+  crashed)", `GRADLE_EXIT=1` (full log `/tmp/s9d-gh.log`, `/tmp/s9d-sdkman.log`).
+  That is the known RAM ceiling (≈3.9 GB total, **no swap**, ~700 MB available
+  with the dev server running; `/` was down to ~370 MB free after installing
+  platform 36, so no second download-heavy attempt was made rather than risk
+  filling the shared disk). **No compile, no `assemble`, no APK/AAB — none of that
+  is claimed.** A follow-up needs a free-memory machine for
+  `./gradlew :app:assembleDebug` (first run downloads AGP 8.10.1 + the AndroidX
+  set), plus a real Android 16 device pass for the edge-to-edge layout, the
+  ≥600dp orientation change, and a BLE connect/notify against a real adapter.

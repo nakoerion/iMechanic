@@ -25,8 +25,10 @@ import { readFileSync } from "node:fs";
 import {
   canShowPurchaseUi,
   platformAfterMount,
+  shellHomeHref,
   useCanShowPurchaseUi,
   useIsAndroidShell,
+  useShellHomeHref,
 } from "../src/native/android-shell";
 import {
   ANDROID_SHELL_USER_AGENT,
@@ -207,5 +209,47 @@ describe("config drift — the shell token and the server token must be the same
     expect(config).toContain(`appendUserAgent: "${ANDROID_SHELL_USER_AGENT}"`);
     const androidBlock = config.slice(config.indexOf("android: {"));
     expect(androidBlock).toContain("appendUserAgent");
+  });
+});
+
+describe("S9d — the Android shell's home link never reaches the marketing page", () => {
+  it("routes to /app only when the platform is known to be android", () => {
+    expect(shellHomeHref(true)).toBe("/app");
+  });
+
+  it("keeps the web answer for the browser, the iOS shell and the server", () => {
+    /* `false` is what `useIsAndroidShell()` returns on the server, on the first
+       client render, in a browser and in the iOS shell — so all four get "/". */
+    expect(shellHomeHref(false)).toBe("/");
+  });
+
+  it("is never '/app' before mount, even when the shell is asking — no hydration mismatch", () => {
+    /* The React #418 contract: the server cannot see `window.Capacitor`, and the
+       first client render has to match the server HTML. So even with Capacitor
+       injected as Android, the pre-mount render is the web answer. The Android
+       shell re-renders to "/app" after the effect; nothing renders "/app" into
+       the server HTML. */
+    setCapacitor({ getPlatform: () => "android" });
+    function HomeLinkProbe() {
+      return createElement("a", { href: useShellHomeHref() }, "home");
+    }
+    const html = renderToString(createElement(HomeLinkProbe));
+    expect(html).toContain('href="/"');
+    expect(html).not.toContain("/app");
+  });
+
+  it("no component ships a hard-coded link to the landing page", () => {
+    /* A regression guard, in the same spirit as the token-drift test above: if
+       someone re-adds `href="/"` to either spot, the Android shell silently
+       regains a route to the pricing bands. The two files that had one are the
+       legal-page brand mark and the 404's "Go to the homepage". */
+    for (const file of [
+      "../src/routes/__root.tsx",
+      "../src/components/legal/legal-page.tsx",
+    ]) {
+      const source = readFileSync(new URL(file, import.meta.url), "utf8");
+      expect(source, file).not.toContain('href="/"');
+      expect(source, file).toContain("useShellHomeHref");
+    }
   });
 });

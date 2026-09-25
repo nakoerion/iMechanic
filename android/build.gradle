@@ -7,7 +7,12 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:8.7.2'
+        // Slice S9d: 8.10 is the first AGP whose maximum supported API level is
+        // 36 (8.9 stops at 35, and AGP warns and suppresses nothing below that);
+        // 8.10 still uses the Gradle 8.11.1 wrapper this project already pins,
+        // so the SDK 36 bump costs no toolchain change. Capacitor 8 ships 8.13,
+        // which would drag the wrapper to Gradle 8.13+.
+        classpath 'com.android.tools.build:gradle:8.10.1'
         classpath 'com.google.gms:google-services:4.4.2'
         // Slice S7: the app is Kotlin. The version comes from gradle.properties,
         // not variables.gradle — the buildscript block is evaluated before the rest
