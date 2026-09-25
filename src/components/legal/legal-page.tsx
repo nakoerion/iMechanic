@@ -23,6 +23,7 @@ import { CARD_MATERIAL } from "../app-shell";
 import { EngineMark } from "../landing/ui";
 import { SiteFooter } from "../site-footer";
 import { cn } from "../../lib/cn";
+import { useShellHomeHref } from "../../native/android-shell";
 import {
   CONTACT_EMAIL,
   LAST_UPDATED_LABEL,
@@ -223,11 +224,17 @@ export function LegalToc({
 }
 
 function LegalHeader() {
+  /* S9d — inside the Android shell this brand link goes to the app, because the
+     landing page it would otherwise open carries the pricing bands and Play
+     forbids steering to a purchase. `"/"` until the platform is known (server +
+     first client render), `"/app"` only in the Android shell: same
+     hydration-safe rule as the purchase boundary in `native/android-shell.ts`. */
+  const homeHref = useShellHomeHref();
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-navy-950/90 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
         <a
-          href="/"
+          href={homeHref}
           className="flex items-center gap-2 rounded-control text-white"
         >
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand text-on-brand">

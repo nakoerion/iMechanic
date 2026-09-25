@@ -9,6 +9,7 @@ import {
   SITE_ORIGIN,
 } from "~/lib/site";
 import { themeInitScript, themeDataAttrs } from "~/lib/theme";
+import { useShellHomeHref } from "~/native/android-shell";
 import appCss from "~/styles/app.css?url";
 
 export const Route = createRootRoute({
@@ -99,6 +100,10 @@ export const Route = createRootRoute({
 /** Styled 404 (QA defect D21). Plain statement of fact, a way back in —
  *  no chrome, so it works for both marketing and app URLs. */
 function NotFound() {
+  /* S9d — "home" is the app inside the Android shell (the landing page carries
+     the pricing bands), and "/" everywhere else. `/` until the platform is
+     known, so the server HTML and the first client render agree. */
+  const homeHref = useShellHomeHref();
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center bg-app-bg px-6 text-center text-fg">
       <p className="text-xs font-semibold uppercase tracking-wider text-fg-subtle">
@@ -119,7 +124,7 @@ function NotFound() {
           Open the app
         </a>
         <a
-          href="/"
+          href={homeHref}
           className="rounded-control border border-line-strong px-5 py-3 text-sm font-semibold text-fg transition-colors hover:bg-neutral-fill"
         >
           Go to the homepage
