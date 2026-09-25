@@ -8,25 +8,23 @@
  * will drift, and a legal page that contradicts another one is worse than no
  * page at all. Change a placeholder here and all three pages change together.
  *
- * The values are deliberately *VISIBLE placeholders*, never invented values.
- * We do not know the owner's legal entity, registered address or support
- * address, and guessing them would put a false statement on a page the public
- * (and Google) reads. They render through `Placeholder` in
- * `components/legal/legal-page.tsx`, so they are unmistakable in the page and
- * greppable in the repo: `grep -rn '{{' src/routes src/lib/legal.ts`.
+ * The values are owner-provided (EasySolution shpk, Tirana, Albania). They
+ * render through `Placeholder` in `components/legal/legal-page.tsx`, which
+ * highlights them so the entity name, address and contact mailbox are
+ * unmistakable on every page.
  */
 
 export const LEGAL_PLACEHOLDERS = {
   /** The registered company/sole-trader name operating iMechanic. */
-  LEGAL_ENTITY_NAME: "{{LEGAL_ENTITY_NAME}}",
+  LEGAL_ENTITY_NAME: "EasySolution shpk",
   /** The registered address of that entity. */
-  LEGAL_ENTITY_ADDRESS: "{{LEGAL_ENTITY_ADDRESS}}",
+  LEGAL_ENTITY_ADDRESS: "Tirana, Albania",
   /** Support/privacy mailbox the public writes to for any request. */
-  CONTACT_EMAIL: "{{CONTACT_EMAIL}}",
-  /** Date the owner last revised the three pages (e.g. 2026-10-01). */
-  LAST_UPDATED: "{{LAST_UPDATED}}",
+  CONTACT_EMAIL: "info@easysolution.al",
+  /** Date the owner last revised the three pages. */
+  LAST_UPDATED: "24 September 2026",
   /** Country/state whose law governs the Terms of Use. */
-  LEGAL_JURISDICTION: "{{LEGAL_JURISDICTION}}",
+  LEGAL_JURISDICTION: "Albania",
 } as const;
 
 export const CONTACT_EMAIL = LEGAL_PLACEHOLDERS.CONTACT_EMAIL;
