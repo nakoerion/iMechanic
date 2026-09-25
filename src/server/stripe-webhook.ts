@@ -60,6 +60,25 @@ function jsonResponse(status: number, body: unknown): Response {
  * (`client_reference_id` / `metadata`); it narrows matching when the customer
  * link is missing, and `upsertSubscription` still verifies it against the
  * users table before trusting it.
+ *
+ * S9c — deleting an account cannot be undone by a LATE webhook, and this is why
+ * (no extra guard is needed, deliberately):
+ *  - `upsertSubscription` matches a user ONLY through the local `users` table —
+ *    by `stripe_customer_id`, or by the `metadata.userId`/`client_reference_id`
+ *    we wrote ourselves, re-verified with a `SELECT ... FROM users WHERE id = …`.
+ *    When the account is deleted, the user row was deleted first (its stripe
+ *    customer id went with it), so BOTH lookups return nothing and the call
+ *    returns `{ written: false, reason: "no-user" }`. The outcome is logged and
+ *    the delivery is acked with 200, so Stripe stops retrying. Nothing is
+ *    written.
+ *  - There is no path here that CREATES a user: only `verifyMagicLinkCore`
+ *    (a fresh magic-link sign-in by a human) ever inserts into `users`.
+ *  - The schema makes a resurrection impossible even if the matching were
+ *    wrong: `subscriptions.user_id` is `NOT NULL REFERENCES users(id)
+ *    ON DELETE CASCADE`, so a subscription row cannot exist without its user.
+ *  - The event id is still recorded in `stripe_events` (the idempotency
+ *    ledger). That table holds Stripe's own event ids and a timestamp and no
+ *    personal data, so it is deliberately left alone by a deletion.
  */
 async function applySubscriptionPayload(
   payload: StripeSubscriptionLike,

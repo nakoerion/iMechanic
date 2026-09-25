@@ -471,5 +471,55 @@ export const APP_COPY = {
       "Checkout complete. If your subscription is active, it shows above — this page reads your real status, not this message.",
     checkoutCanceled:
       "Checkout was canceled — nothing was charged and your plan is unchanged.",
+    /* Danger zone (S9c) — in-app account deletion, a Google Play requirement.
+       The wording stays flat: exactly what goes, that it cannot be undone, and
+       that an active subscription is cancelled immediately. No urgency, no
+       "are you sure you want to lose everything?" theatre. */
+    deleteEyebrow: "Danger zone",
+    deleteHeading: "Delete your account",
+    deleteIntro:
+      "Deleting your account removes it and everything stored against it, permanently. This cannot be undone.",
+    deleteListHeading: "What gets deleted",
+    deleteList: [
+      "your account and email address",
+      "your vehicles — make, model, year, engine, VIN and mileage",
+      "every scan and fault code, including the adapter transcript",
+      "every diagnosis — verdicts, root causes, AI answers and cost bands",
+      "your repair jobs, step progress and verification scans",
+      "your saved history and every sign-in session",
+      "your subscription record",
+      "any mailing-list signup you made on the marketing page",
+    ],
+    deleteProActive:
+      "Your iMechanic Pro subscription is cancelled immediately, at the same moment — you will not be charged again.",
+    deleteConfirmHeading: "Confirm by typing your email address",
+    deleteConfirmHint: (email: string) =>
+      `Type ${email} exactly to enable the button.`,
+    deleteConfirmLabel: "Your email address",
+    deleteConfirmPlaceholder: "you@example.com",
+    deleteButton: "Delete my account",
+    deleteWorking: "Deleting your account…",
+    deleteMismatch: "That does not match the address you are signed in with.",
+    deleteFailed:
+      "Your account was not deleted and nothing has been removed.",
+    deleteEmailRouteNote:
+      "Cannot sign in any more? The account deletion page explains the email route.",
+  },
+  /* The confirmation the browser lands on after a successful deletion (S9c).
+     A full page load, signed out — the session is gone by then, so there is
+     nothing here that can read the deleted account's data. */
+  accountDeleted: {
+    title: "Your account is deleted",
+    description:
+      "Your iMechanic account and everything stored against it have been removed.",
+    eyebrow: "Done",
+    heading: "Your account has been deleted",
+    body: "Everything iMechanic stored against it is gone: your account, vehicles, scans, fault codes, diagnoses and repair history. If you had a Pro subscription it has been cancelled, and you will not be charged again.",
+    subscriptionNote:
+      "No further charges are made. Payment records from before the cancellation are held by Stripe, as tax and accounting law requires.",
+    signOutNote:
+      "You are signed out everywhere. The same address can be used to create a fresh account at any time — it starts empty, and nothing from before comes back.",
+    cta: "Back to iMechanic",
+    ctaHref: "/",
   },
 } as const;

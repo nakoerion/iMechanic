@@ -39,3 +39,18 @@ export function requireTestDbUrl(): string {
 export function testDb() {
   return neon(requireTestDbUrl());
 }
+
+/**
+ * True when a usable, non-production test database is configured.
+ *
+ * The DB-backed suites wrap themselves in `describe.skipIf(!hasTestDbUrl())` so
+ * that `bun run test` is GREEN with no `TEST_DATABASE_URL` — the suites SKIP
+ * (and say so in the summary) instead of failing the run with a setup error.
+ * The safety property is unchanged: they only ever run against a separate
+ * branch, and `requireTestDbUrl()` still refuses a missing variable or a URL
+ * that equals production.
+ */
+export function hasTestDbUrl(): boolean {
+  const testUrl = process.env.TEST_DATABASE_URL;
+  return Boolean(testUrl && testUrl !== process.env.DATABASE_URL);
+}

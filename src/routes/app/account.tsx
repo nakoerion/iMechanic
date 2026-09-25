@@ -2,17 +2,22 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Card, ScreenHeader } from "../../components/app-shell";
 import { LegalLinks } from "../../components/legal/legal-page";
-import { CheckIcon, InfoIcon } from "../../components/icons";
+import { AlertIcon, CheckIcon, InfoIcon } from "../../components/icons";
 import { Button, buttonClasses } from "../../components/ui/button";
 import { ThemeControl } from "../../components/ui/theme-control";
 import { FreePlanCard, ProStatusCard } from "../../components/pro/pro-plan";
 import { cn } from "../../lib/cn";
 import { APP_COPY } from "../../lib/copy";
-import { useEntitlement, type EntitlementHandle } from "../../lib/entitlement";
+import {
+  isPro,
+  useEntitlement,
+  type EntitlementHandle,
+} from "../../lib/entitlement";
 import { MARKET_LIST, type CountryCode } from "../../lib/market";
-import { clientSignOutAndClearCache } from "../../lib/session";
+import { clearShellCaches, clientSignOutAndClearCache } from "../../lib/session";
 import { useIsAndroidShell } from "../../native/android-shell";
 import {
+  deleteAccount,
   getCurrentUser,
   updateCountry,
 } from "../../server/auth";
@@ -233,6 +238,7 @@ function AppAccount() {
         </p>
         <ThemeControl className="mt-3" />
       </Card>
+      <DangerZone user={user} entitlement={entitlement} />
     </div>
   );
 }
@@ -306,6 +312,161 @@ function FreeForeverNote() {
         <span className="font-semibold">Free forever:</span> reading fault
         codes and clearing them stays free — always. No pay-to-read, no
         pay-to-clear.
+      </p>
+    </section>
+  );
+}
+
+/**
+ * The danger zone — in-app account deletion (slice S9c). This is the flow
+ * Google Play requires to exist inside the app, so it renders on every surface
+ * (web, PWA, iOS and Android shells) and behind no paywall.
+ *
+ * Deliberate choices:
+ *  - It is visually separated (a hazard-ruled block on the `danger` token),
+ *    NOT dimmed or buried: a deletion path that is hard to find is a dark
+ *    pattern, and hiding it would also fail the Play requirement.
+ *  - The email is typed EXACTLY, and the button stays disabled until it matches
+ *    the session address — the same comparison the server repeats against the
+ *    session it trusts. The client check is convenience, never the rule.
+ *  - The Pro sentence appears ONLY when a subscription is actually active, and
+ *    it says the cancellation is immediate. No "your last chance" wording.
+ *  - A failure keeps every byte in place and shows the server's own sentence
+ *    (a failed Stripe cancel must not look like a successful deletion).
+ */
+function DangerZone({
+  user,
+  entitlement,
+}: {
+  user: AuthUser;
+  entitlement: EntitlementHandle;
+}) {
+  const a = APP_COPY.account;
+  const [typed, setTyped] = useState("");
+  const [state, setState] = useState<"idle" | "working" | "error">("idle");
+  const [error, setError] = useState<string | null>(null);
+
+  /** Active Pro is reported only from a real, loaded entitlement. */
+  const proActive = isPro(entitlement.state);
+
+  // Addresses are stored lowercase everywhere (normaliseEmail), so the match
+  // trims and lowercases too — the address itself must still be typed in full
+  // and exactly, which is what makes this a deliberate confirmation.
+  const matches = typed.trim().toLowerCase() === user.email.trim().toLowerCase();
+
+  async function onDelete() {
+    if (!matches || state === "working") return;
+    setState("working");
+    setError(null);
+    try {
+      await deleteAccount({ data: { email: typed } });
+      // The session row and cookie are already gone; drop the cached app shell
+      // too, then do a FULL page load so no in-memory state survives.
+      await clearShellCaches();
+      window.location.href = "/app/account-deleted";
+    } catch (err) {
+      setError(
+        err instanceof Error && err.message.trim() ? err.message.trim() : null,
+      );
+      setState("error");
+    }
+  }
+
+  return (
+    <section
+      aria-labelledby="danger-zone-heading"
+      className="rounded-card border-2 border-danger-border bg-danger-fill p-5"
+    >
+      <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-danger-fg">
+        <AlertIcon className="h-4 w-4" aria-hidden />
+        {a.deleteEyebrow}
+      </p>
+      <h2 id="danger-zone-heading" className="mt-2 text-base font-bold text-fg">
+        {a.deleteHeading}
+      </h2>
+      <p className="mt-2 text-sm leading-relaxed text-fg-muted">{a.deleteIntro}</p>
+
+      <h3 className="mt-4 text-xs font-semibold uppercase tracking-wider text-fg-subtle">
+        {a.deleteListHeading}
+      </h3>
+      <ul className="mt-2 space-y-1">
+        {a.deleteList.map((item) => (
+          <li
+            key={item}
+            className="flex items-start gap-2 text-sm leading-relaxed text-fg-muted"
+          >
+            <span
+              aria-hidden
+              className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-danger-solid"
+            />
+            {item}
+          </li>
+        ))}
+      </ul>
+
+      {proActive && (
+        <p className="mt-4 rounded-card border border-line bg-surface p-3 text-sm leading-relaxed text-fg-muted">
+          {a.deleteProActive}
+        </p>
+      )}
+
+      <label
+        htmlFor="delete-confirm-email"
+        className="mt-5 block text-xs font-semibold uppercase tracking-wider text-fg-subtle"
+      >
+        {a.deleteConfirmHeading}
+      </label>
+      <p className="mt-1 text-xs leading-relaxed text-fg-subtle">
+        {a.deleteConfirmHint(user.email)}
+      </p>
+      <input
+        id="delete-confirm-email"
+        name="delete-confirm-email"
+        type="email"
+        autoComplete="off"
+        spellCheck={false}
+        inputMode="email"
+        value={typed}
+        disabled={state === "working"}
+        onChange={(e) => {
+          setTyped(e.target.value);
+          if (state === "error") setState("idle");
+        }}
+        placeholder={a.deleteConfirmPlaceholder}
+        aria-label={a.deleteConfirmLabel}
+        aria-describedby="delete-confirm-feedback"
+        className="mt-2 w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-subtle focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40"
+      />
+      <p
+        id="delete-confirm-feedback"
+        role="status"
+        className="mt-2 min-h-5 text-xs font-medium"
+      >
+        {typed.length > 0 && !matches ? (
+          <span className="text-fg-muted">{a.deleteMismatch}</span>
+        ) : null}
+      </p>
+
+      <Button
+        variant="danger"
+        size="md"
+        fullWidth
+        disabled={!matches || state === "working"}
+        loading={state === "working"}
+        loadingLabel={a.deleteWorking}
+        onClick={() => void onDelete()}
+      >
+        {a.deleteButton}
+      </Button>
+
+      {state === "error" && (
+        <p className="mt-3 text-sm leading-relaxed text-danger-fg">
+          {error ?? a.deleteFailed}
+        </p>
+      )}
+
+      <p className="mt-3 text-xs leading-relaxed text-fg-subtle">
+        {a.deleteEmailRouteNote}
       </p>
     </section>
   );

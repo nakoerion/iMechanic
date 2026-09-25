@@ -77,3 +77,30 @@ export const signOut = createServerFn({ method: "POST" }).handler(async () => {
   const { signOutCore } = await import("./auth-core");
   return signOutCore();
 });
+
+/**
+ * Delete the signed-in user's account and everything stored against it — slice
+ * S9c (a Google Play requirement).
+ *
+ * The typed email arrives from the danger zone on the account screen and is
+ * re-checked server-side against the session's own address inside
+ * `deleteAccountCore` — the browser's comparison is convenience only. The
+ * typed value is not a credential, so nothing here is trusted as one.
+ *
+ * Throws (and deletes nothing) when: there is no session, the typed address
+ * does not match, or the Stripe cancellation of an active Pro subscription
+ * fails. On success the session cookie is cleared and the client navigates to
+ * /app/account-deleted.
+ */
+export const deleteAccount = createServerFn({ method: "POST" })
+  .validator((input: unknown) => {
+    const typedEmail = (input as { email?: unknown } | null)?.email;
+    if (typeof typedEmail !== "string" || typedEmail.length === 0) {
+      throw new Error("Type your email address to confirm.");
+    }
+    return { email: typedEmail };
+  })
+  .handler(async ({ data: { email } }) => {
+    const { deleteAccountCore } = await import("./auth-core");
+    return deleteAccountCore(email);
+  });

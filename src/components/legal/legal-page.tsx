@@ -49,7 +49,7 @@ export function Placeholder({ children }: { children: ReactNode }) {
   );
 }
 
-/** "Last updated: {{LAST_UPDATED}}" — the same line on all three pages. */
+/** "Last updated: <LEGAL_PLACEHOLDERS.LAST_UPDATED>" — the same line on all three pages. */
 function LastUpdated() {
   return (
     <p className="mt-4 text-xs text-fg-subtle">

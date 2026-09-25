@@ -18,9 +18,11 @@
  *                              src/db.ts (Neon), vercel-entry.ts (Vercel)
  *  - no tracking             → no analytics/ad SDK in package.json and no
  *                              third-party script in public/ or src/ (checked)
- *  - account deletion is NOT implemented yet → there is no delete path in
- *    src/ (only the magic-link/session sign-out); the page says so in plain
- *    words instead of claiming a button that does not exist.
+ *  - account deletion → src/server/auth-core.ts `deleteAccountCore` (in-app
+ *    flow, S9c: Stripe cancel first, then the user row whose ON DELETE CASCADE
+ *    takes the rest, plus the email-keyed `login_tokens` and `waitlist` rows
+ *    that no cascade reaches). `stripe_events` is left alone and holds no
+ *    personal data.
  * If the code changes, this page changes in the same pull request.
  */
 import { createFileRoute } from "@tanstack/react-router";
@@ -345,7 +347,7 @@ function PrivacyPage() {
           rows={[
             [
               "Your account, vehicles, scans, codes, diagnoses and repair jobs",
-              "Until you ask us to delete them. There is no automatic expiry today — your repair history is the point of the product, so we keep it until you say otherwise.",
+              "Until you delete your account in the app, or ask us to delete it. There is no automatic expiry today — your repair history is the point of the product, so we keep it until you say otherwise.",
             ],
             [
               "Sign-in session",
@@ -353,11 +355,11 @@ function PrivacyPage() {
             ],
             [
               "Sign-in link",
-              "15 minutes, single use. Only a hash of it is stored.",
+              "15 minutes, single use. Only a hash of it is stored. Deleting your account removes the pending sign-in links for that address too.",
             ],
             [
               "Mailing-list signup",
-              "Until you ask to be removed.",
+              "Until you ask to be removed — deleting your account removes it as well.",
             ],
             [
               "Billing record",
@@ -366,30 +368,33 @@ function PrivacyPage() {
           ]}
         />
         <P className="mt-4">
-          Being straight about a gap: expired sign-in links and finished webhook
-          receipts are not yet on an automatic cleanup schedule. They hold no
-          usable credential (hashes only) and no personal content, and we remove
-          them on request.
+          Being straight about a gap: finished Stripe webhook receipts are not yet
+          on an automatic cleanup schedule. They hold no personal data at all —
+          Stripe's own event ids and arrival times, kept only so a duplicated
+          delivery cannot be applied twice — and we remove them on request.
         </P>
       </LegalSection>
 
       <LegalSection id="deletion" title="Deleting your data">
         <P>
-          Deleting your account is <B>not yet a button in the app</B>. We would
-          rather say that plainly than describe a feature that does not exist.
-          Today, deletion is done by asking us:
+          Deleting your account is <B>a button in the app</B>: open{" "}
+          <B>Account</B>, scroll to the <B>Danger zone</B> and choose{" "}
+          <B>Delete account</B>. Type your email address to confirm and the
+          account, and everything stored against it, is removed there and then —
+          including your vehicles, scans, fault codes, diagnoses, repair jobs,
+          sessions, sign-in links and the subscription record (an active Pro
+          subscription is cancelled immediately, so you are not billed again).
+          This cannot be undone.
         </P>
         <P>
-          Email{" "}
+          If you cannot sign in, email{" "}
           <LegalLink href={contactMailto("Delete my iMechanic account")}>
             {CONTACT_EMAIL}
           </LegalLink>{" "}
-          from the address you sign in with, and we delete your account and
-          everything stored against it — vehicles, scans, fault codes,
-          diagnoses, repair jobs, sessions and the subscription record — and
-          confirm when it is done. If you cannot sign in at all, write to the
-          same address and we will handle it manually. Full instructions are on
-          the{" "}
+          from the address you sign in with, and we delete the account and
+          everything stored against it and confirm when it is done. If you cannot
+          reach that mailbox at all, write to the same address and we will handle
+          it manually. Full instructions are on the{" "}
           <LegalLink href="/delete-account">account deletion page</LegalLink>.
         </P>
       </LegalSection>

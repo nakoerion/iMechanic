@@ -34,7 +34,7 @@ export function contactMailto(subject: string): string {
   return `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}`;
 }
 
-/** Shown at the top of every page — "Last updated: {{LAST_UPDATED}}". */
+/** Shown at the top of every page — "Last updated: <LEGAL_PLACEHOLDERS.LAST_UPDATED>". */
 export const LAST_UPDATED_LABEL = "Last updated";
 
 /** The three pages, in the order they are linked everywhere. */
