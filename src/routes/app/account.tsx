@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Card, ScreenHeader } from "../../components/app-shell";
+import { LegalLinks } from "../../components/legal/legal-page";
 import { CheckIcon, InfoIcon } from "../../components/icons";
 import { Button, buttonClasses } from "../../components/ui/button";
 import { ThemeControl } from "../../components/ui/theme-control";
@@ -135,6 +136,7 @@ function AppAccount() {
             {APP_COPY.account.signInButton}
           </a>
         </Card>
+        <LegalCard />
         <FreeForeverNote />
         <Card>
           <h2 className="text-sm font-bold text-fg">{APP_COPY.theme.heading}</h2>
@@ -222,6 +224,7 @@ function AppAccount() {
       >
         {APP_COPY.account.signOutButton}
       </Button>
+      <LegalCard />
       <FreeForeverNote />
       <Card>
         <h2 className="text-sm font-bold text-fg">{APP_COPY.theme.heading}</h2>
@@ -272,6 +275,25 @@ function PlanSection({ entitlement }: { entitlement: EntitlementHandle }) {
 
   const status = state.entitlement.status;
   return <FreePlanCard statusNote={status ? a.planStatus[status] : null} />;
+}
+
+/**
+ * S9b — the three public legal pages (privacy, terms, account deletion). They
+ * are linked from here as well as from the landing footer and the sign-in
+ * screen, because the Android app loads this same site and a Play reviewer has
+ * to be able to reach the public deletion URL from inside the app.
+ */
+function LegalCard() {
+  return (
+    <Card>
+      <h2 className="text-sm font-bold text-fg">Legal</h2>
+      <p className="mt-1 text-xs leading-relaxed text-fg-subtle">
+        What iMechanic stores, the terms you use it under, and how to delete your
+        account and its data.
+      </p>
+      <LegalLinks className="mt-3" />
+    </Card>
+  );
 }
 
 function FreeForeverNote() {

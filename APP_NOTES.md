@@ -27,6 +27,9 @@ bun scripts/gen-icons.mjs    # regenerate PWA + tab icons from EngineIcon (src/c
 | `/app/vehicles` | `src/routes/app/vehicles.tsx` | Garage (S3+) |
 | `/app/history` | `src/routes/app/history.tsx` | Scan/repair history (S5) |
 | `/app/account` | `src/routes/app/account.tsx` | Account (S2) |
+| `/privacy` | `src/routes/privacy.tsx` | Privacy policy — public, no sign-in (S9b) |
+| `/terms` | `src/routes/terms.tsx` | Terms of use, incl. the safety disclaimer — public (S9b) |
+| `/delete-account` | `src/routes/delete-account.tsx` | Public account-deletion URL Google Play requires (S9b) |
 
 Shared components live in `src/components/` (`empty-state.tsx`, `icons.tsx`).
 
@@ -1574,3 +1577,74 @@ and were not added for it.
 16 skipped** (209 + the 17 new); the 3 DB-backed suites still cannot start
 without `TEST_DATABASE_URL` (owner-gated, pre-existing — unchanged by this
 slice). `bun run build` → clean.
+
+## S9b — public legal pages: privacy, terms, account deletion (engineer, branch `s9b-legal-pages`) — 2026-09-25
+**Why.** Google Play requires a PUBLIC account-deletion URL, and the app had no
+privacy policy, no terms and no deletion page. Three server-rendered, signed-out
+routes now exist: `/privacy`, `/terms`, `/delete-account`. They are read by a
+Play reviewer and by a worried owner, so accuracy outranks polish: every
+statement is taken off the code, and the pages say plainly where a feature does
+not exist yet.
+**The landing footer promise is now kept.** It used to say "we'll publish the
+full data policy before launch"; the footer's data-policy column now links to
+`/privacy` and the footer grew a legal row linking all three pages.
+**Two decisions.**
+- `src/lib/legal.ts` is the single source of the owner-fillable placeholders
+  (`{{LEGAL_ENTITY_NAME}}`, `{{LEGAL_ENTITY_ADDRESS}}`, `{{CONTACT_EMAIL}}`,
+  `{{LAST_UPDATED}}`, `{{LEGAL_JURISDICTION}}` — the last one for the Terms'
+  governing-law line, which is better as a marked blank than as a guess) plus the
+  three cross-links. They render through `Placeholder` (mono + amber box) so a
+  blank can never be mistaken for a real value; one edit changes all three pages.
+- The pages reuse the app's role tokens (`bg-app-bg`, `text-fg`, `border-line`,
+  `CARD_MATERIAL`, `rounded-card`) rather than the landing page's fixed white
+  document, so they are readable in BOTH themes; header and footer keep the fixed
+  navy chrome and therefore use `on-chrome`/white-alpha colours only. The landing
+  `Footer` moved out of `routes/index.tsx` into `src/components/site-footer.tsx`
+  with an `anchorBase` prop, so the landing's in-page anchors (`#beta`) do not
+  become dead links on the legal pages.
+**Privacy policy — what the code actually says** (each claim read off source):
+- stored: email; country (DE/GB/AL); vehicles (make/model/year/engine/VIN/
+  mileage_km); scans (source live/demo/manual, the adapter's VIN when reported,
+  and for live scans the transcript, capped at 32 entries) + `scan_codes`;
+  diagnoses (verdict, root cause, confidence, reasoning, DIY/workshop bands and
+  currency); `repair_jobs`/`repair_steps`; subscription status/band/period; the
+  `waitlist` email; sessions; hashed `login_tokens`.
+- exactly one cookie: `imechanic.session`, HttpOnly/Secure/SameSite=Lax, 30 days
+  (`server/auth-core.ts`). localStorage holds only `imechanic.theme`
+  (`lib/theme.ts`); the service-worker cache is wiped on sign-out
+  (`lib/session.ts`). No analytics/ad/tracking cookie or SDK exists — verified by
+  grep over `package.json`, `src/` and `public/`.
+- Bluetooth: adapter only, and `neverForLocation` is REAL —
+  `android/app/src/main/AndroidManifest.xml` declares `BLUETOOTH_SCAN` with
+  `android:usesPermissionFlags="neverForLocation"`, and the legacy
+  `ACCESS_FINE_LOCATION` is capped at `maxSdkVersion="30"` exactly because
+  Android 11 and below require it for any BLE scan. iOS declares only the two
+  `NSBluetooth*UsageDescription` strings — no location key.
+- Anthropic (Pro AI): the payload is the scan's codes with their catalogue
+  meanings, the vehicle's make/model/year/mileage, the free rules verdict and its
+  reasons, and a fixed instruction (`ai-core.ts buildAiPrompt` +
+  `scans-core.ts loadAiContextCore`). **No email, no VIN, no account or session
+  id.** The page lists that payload line by line rather than summarising it.
+- processors: Vercel (hosting), Neon (database), Stripe (payments — web only; the
+  Android shell cannot start a checkout at all), Resend (sign-in email),
+  Anthropic (AI).
+- **account deletion is NOT implemented.** There is no delete path in `src/`
+  (only `signOutCore` removes a session row). Both the privacy policy and
+  `/delete-account` say so in plain words and give the email route that works
+  today, with the in-app "Account → Delete account" flow labelled as coming with
+  the next release — a public deletion route for Play without describing a button
+  that does not exist. Retention is stated honestly too, including that expired
+  sign-in-link hashes are not yet on an automatic cleanup schedule.
+**Linking.** All three pages are linked from the landing footer, `/app/signin`
+and `/app/account` (signed-in and signed-out states) — so they are reachable
+inside the Android shell, which loads this same site.
+**Verified.** `bun run build` clean; `bunx tsc --noEmit` → 0 errors;
+`bun run test` → **226 passed / 16 skipped**, the same 3 DB-backed suites still
+aborting on the missing `TEST_DATABASE_URL` (owner-gated, unchanged by this
+slice — that is what makes the script exit 1). Rendered from the **built output**
+on a spare port (never port 3000, per the standing rule): `/privacy`, `/terms`,
+`/delete-account`, `/` and `/app/signin` all returned **200 with no session**,
+each legal page carries its own `<title>`, the placeholders appear as
+`{{...}}`, and the landing footer + sign-in screen really do link all three
+pages. Browser QA of the pages (390x844 and desktop, both themes) is QA's pass,
+not claimed here.

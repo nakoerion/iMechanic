@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { ScreenHeader } from "../../components/app-shell";
+import { LegalLinks } from "../../components/legal/legal-page";
 import { Button } from "../../components/ui/button";
 import { FormField, inputClasses } from "../../components/ui/form-field";
 import { APP_COPY } from "../../lib/copy";
@@ -91,6 +92,15 @@ function SignInPage() {
           {APP_COPY.signIn.sendButton}
         </Button>
       </form>
+      {/* S9b — the three public legal pages, reachable from inside the app too
+          (the Android shell loads this same site, and Play requires the
+          deletion URL to be findable). Plain links, no sign-in needed. */}
+      <div className="border-t border-line pt-5">
+        <p className="text-xs leading-snug text-fg-subtle">
+          Sign-in is a one-time email link — iMechanic never sets a password.
+        </p>
+        <LegalLinks className="mt-3" />
+      </div>
     </div>
   );
 }
