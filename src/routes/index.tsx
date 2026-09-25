@@ -21,6 +21,7 @@ import {
 } from "../components/landing/ui";
 import { VerdictPanel } from "../components/severity/verdict-panel";
 import { FaultCodeCard } from "../components/severity/fault-code-card";
+import { SiteFooter } from "../components/site-footer";
 import {
   PRICE_BANDS,
   PRICING_PREVIEW_NOTE,
@@ -213,7 +214,7 @@ function Home() {
         <Markets />
         <StoreApps />
       </main>
-      <Footer />
+      <SiteFooter />
     </div>
   );
 }
@@ -865,76 +866,3 @@ function StoreApps() {
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* Footer                                                              */
-/* ------------------------------------------------------------------ */
-
-function Footer() {
-  return (
-    <footer className="border-t border-white/10 bg-navy-950 text-slate-300">
-      <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
-        <div className="grid gap-10 md:grid-cols-3">
-          <div>
-            <div className="flex items-center gap-2 text-white">
-              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-brand text-on-brand">
-                <EngineMark className="h-4 w-4" />
-              </span>
-              <span className="text-base font-bold tracking-tight">
-                iMechanic
-              </span>
-            </div>
-            <p className="mt-3 text-sm leading-relaxed text-slate-400">
-              From fault code to completed repair. Reading codes and clearing
-              them is free, always.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-4 text-sm font-semibold">
-              <a className="text-amber-300 hover:text-amber-200" href="/app">
-                Open the app
-              </a>
-              <a className="text-slate-300 hover:text-white" href="#beta">
-                Store-app mailing list
-              </a>
-            </div>
-          </div>
-
-          <div>
-            <h3 className="text-sm font-bold uppercase tracking-wider text-white">
-              Pricing principles
-            </h3>
-            <ul className="mt-3 space-y-2 text-sm leading-relaxed">
-              <li>No paywalls on core scanning — reading is free, always.</li>
-              <li>
-                One transparent subscription. No tiers that hide the real
-                product.
-              </li>
-              <li>
-                No dark patterns: no pay-to-clear, no surprise renewals, no fine
-                print gotchas.
-              </li>
-            </ul>
-          </div>
-
-          <div>
-            <h3 className="text-sm font-bold uppercase tracking-wider text-white">
-              Data policy — in one paragraph
-            </h3>
-            <p className="mt-3 text-sm leading-relaxed">
-              Your car's data is your data. iMechanic reads what your car
-              reports and shows it to you in plain language. We don't sell it,
-              we don't keep anything secret about what we collect, and we'll
-              publish the full data policy before launch — readable, not
-              legalese.
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-12 flex flex-col items-start justify-between gap-3 border-t border-white/10 pt-6 text-sm text-slate-400 sm:flex-row">
-          <p>© 2026 iMechanic</p>
-          <p className="font-medium text-amber-300/90">
-            Reading codes and clearing them is free. Always.
-          </p>
-        </div>
-      </div>
-    </footer>
-  );
-}
