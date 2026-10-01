@@ -135,6 +135,17 @@ export const APP_COPY = {
     invalidLinkDescription:
       "Links are single-use and expire after 15 minutes. Request a new one and try again.",
     backToSignIn: "Back to sign in",
+    /* S10-T2 — review-only access path (Google Play app access review). These
+       strings are only ever rendered when the SERVER asked for an access code,
+       which happens only when REVIEW_ACCESS_CODE is configured and the address
+       is the store-review address. With the variable unset, this copy is dead
+       code and nothing on the screen points at it. */
+    reviewCodeLabel: "Access code",
+    reviewCodeHint: "Enter the access code you were given for this review.",
+    reviewCodeButton: "Continue",
+    reviewCodeChecking: "Checking…",
+    reviewCodeSigningInAs: (email: string) => `Signing in as ${email}`,
+    reviewCodeChangeEmail: "Use a different email address",
   },
   scan: {
     title: "Scan",

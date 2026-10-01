@@ -39,6 +39,13 @@ export const LOGIN_TOKEN_TTL_MINUTES = 15;
 export const SESSION_TTL_DAYS = 30;
 export const RATE_LIMIT_SECONDS = 60;
 
+/**
+ * The store-review account's address (slice S10-T2) — the human-readable
+ * marker of the review-only path. Nothing else in the app is allowed to be
+ * special-cased on an address.
+ */
+export const REVIEWER_EMAIL = "playreview@imechanic.app";
+
 /* ------------------------------------------------------------------ */
 /* Pure helpers (exported for unit tests)                              */
 /* ------------------------------------------------------------------ */
@@ -67,6 +74,38 @@ export function normaliseEmail(input: unknown): string | null {
   if (email.length > 254) return null;
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return null;
   return email;
+}
+
+/* ------------------------------------------------------------------ */
+/* Review-only access path — slice S10-T2 (Google Play app review)     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The review access code, or null when the review-only path is OFF.
+ *
+ * OFF is the normal operating state and the default: with `REVIEW_ACCESS_CODE`
+ * unset (or blank) no sign-in request can take the review branch, no reviewer
+ * user can be created, no access-code attempt is ever recorded, and
+ * /app/signin never renders an "Access code" field — the server's answer
+ * carries no field for the client to key on. A clean checkout behaves exactly
+ * as it did before this slice existed.
+ *
+ * `REVIEW_ACCESS_CODE` must be ROTATED OR UNSET whenever a store review is not
+ * in progress (see APP_NOTES.md).
+ */
+export function reviewAccessCode(): string | null {
+  const code = process.env.REVIEW_ACCESS_CODE?.trim();
+  return code ? code : null;
+}
+
+/** Is the review-only path configured in this process? */
+export function reviewAccessEnabled(): boolean {
+  return reviewAccessCode() !== null;
+}
+
+/** Is this (already normalised) address the store-review address? */
+export function isReviewerEmail(email: string): boolean {
+  return email === REVIEWER_EMAIL;
 }
 
 /* ------------------------------------------------------------------ */
@@ -190,52 +229,292 @@ async function resolveCurrentUser(): Promise<AuthUser | null> {
 
 /* ------------------------------------------------------------------ */
 /* Core operations (validated inputs only)                             */
+/* Sign-in (S10-T2): the magic-link request and the review-only         */
+/* access-code submission, both behind the SignInPorts seam below.      */
 /* ------------------------------------------------------------------ */
 
-/** Request a magic link. Honest `{ ok: true }` whether or not the address
- * exists. Idempotent: a still-valid unused token, or a token minted within
- * the rate window, mints and sends nothing new. */
+/**
+ * Every side effect a sign-in needs, as an explicit seam — the injection
+ * pattern `DeleteAccountPorts` already uses for account deletion. The real
+ * ones are built by `defaultSignInPorts()`; unit tests pass their own, so both
+ * the untouched magic-link flow and the review-only branch are provable with
+ * no database, no mail provider and no network.
+ */
+export type SignInPorts = {
+  /** The configured review access code, or null when the path is OFF. */
+  reviewCode: () => string | null;
+  /** A still-valid, unused magic link already exists for this address. */
+  hasLiveToken: (email: string) => Promise<boolean>;
+  /** A login_tokens row was written inside the anti-spam window. */
+  withinRateWindow: (email: string) => Promise<boolean>;
+  /** Mint a magic link: persist its hash and send the email. */
+  issueMagicLink: (email: string) => Promise<void>;
+  /** Record one access-code attempt into the SAME anti-spam window. */
+  recordAccessCodeAttempt: (email: string) => Promise<void>;
+  /** Create the reviewer user if absent; enforce country + is_reviewer. */
+  ensureReviewerUser: () => Promise<AuthUser>;
+  /** Seed the reviewer's demo vehicle + demo scan (idempotent). */
+  seedReviewerContent: (userId: string) => Promise<void>;
+  /** Create a session row for the user and set the session cookie. */
+  startSession: (userId: string) => Promise<void>;
+};
+
+/** The answer /app/signin keys on. `codeRequired` is ABSENT — never `false` —
+ * in every other case, so an off-state deployment reveals nothing extra. */
+export type MagicLinkRequest = { ok: true; codeRequired?: true };
+
+/**
+ * Request a sign-in. Honest `{ ok: true }` whether or not the address exists,
+ * and idempotent: a still-valid unused token, or a row minted within the rate
+ * window, mints and sends nothing new.
+ *
+ * S10-T2 — review-only branch: when (and only when) `REVIEW_ACCESS_CODE` is
+ * configured AND the address is the store-review address, the answer is
+ * `{ ok: true, codeRequired: true }` and NOTHING is minted or emailed. With
+ * the code unset this branch cannot be entered at all and the behaviour is
+ * byte-for-byte the pre-S10-T2 behaviour.
+ */
 export async function requestMagicLinkCore(
   email: string,
-): Promise<{ ok: true }> {
-  const existing = await db<{ token_hash: string }[]>`
-    SELECT token_hash FROM login_tokens
-    WHERE email = ${email}
-      AND used_at IS NULL
-      AND expires_at > now()
-    LIMIT 1`;
-  if (existing.length > 0) {
+  ports: SignInPorts = defaultSignInPorts(),
+): Promise<MagicLinkRequest> {
+  if (ports.reviewCode() !== null && isReviewerEmail(email)) {
+    return { ok: true, codeRequired: true };
+  }
+
+  if (await ports.hasLiveToken(email)) {
     // Earlier link still valid — do not mint, do not re-send (the raw token
     // is only stored hashed, so we cannot re-send the same link anyway).
     return { ok: true };
   }
 
-  const recent = await db<{ n: string }[]>`
-    SELECT count(*)::text AS n FROM login_tokens
-    WHERE email = ${email}
-      AND created_at > now() - interval '60 seconds'`;
-  if (Number(recent[0]?.n ?? 0) > 0) {
+  if (await ports.withinRateWindow(email)) {
     // Inside the anti-spam window — nothing new is minted or sent.
     return { ok: true };
   }
 
+  await ports.issueMagicLink(email);
+  return { ok: true };
+}
+
+/** What the access-code form gets back. Deliberately two fields and no more:
+ * the answer for a wrong code is byte-identical to the answer for a
+ * non-reviewer address or an off deployment — there is no oracle. */
+export type ReviewCodeResult = { ok: true; signedIn: boolean };
+
+/**
+ * Submit the review-only access code (S10-T2 — Google Play app access review).
+ *
+ * The write path, in order, and why it is this order:
+ *  1. review access OFF, or the address is not the reviewer address → the same
+ *     neutral answer, no session, and NOTHING is written or recorded. This is
+ *     what keeps "this address is special" unlearnable from a failed attempt.
+ *  2. the SAME anti-spam window `requestMagicLinkCore` uses
+ *     (`RATE_LIMIT_SECONDS`) → at most one attempt per minute. Checked BEFORE
+ *     the comparison, so a guess flood is throttled rather than answered.
+ *  3. the attempt is recorded (still before the comparison), so every guess
+ *     counts against the window — successful or not.
+ *  4. constant-time compare against the configured code (`tokensEqual`).
+ *     A wrong code returns the neutral answer; the caller renders exactly the
+ *     copy it would render for any other address.
+ *  5. only then: the reviewer user (country DE, `is_reviewer`) and its demo
+ *     content are ensured, and a real session is minted.
+ */
+export async function submitReviewCodeCore(
+  email: string,
+  code: string,
+  ports: SignInPorts = defaultSignInPorts(),
+): Promise<ReviewCodeResult> {
+  const expected = ports.reviewCode();
+  if (expected === null || !isReviewerEmail(email)) {
+    return { ok: true, signedIn: false };
+  }
+
+  if (await ports.withinRateWindow(email)) {
+    return { ok: true, signedIn: false };
+  }
+  await ports.recordAccessCodeAttempt(email);
+
+  if (!tokensEqual(code, expected)) {
+    return { ok: true, signedIn: false };
+  }
+
+  const user = await ports.ensureReviewerUser();
+  await ports.seedReviewerContent(user.id);
+  await ports.startSession(user.id);
+  return { ok: true, signedIn: true };
+}
+
+/**
+ * The reviewer's demo car — a deliberate MIRROR of the app's own demo dataset
+ * (`DEMO_DATASET` in `src/obd/demo-simulator.ts`, `DEMO_VIN` in
+ * `src/obd/driver.ts`).
+ *
+ * Those two modules are client-side only by contract (the driver touches
+ * browser APIs), so a server module may not import them. The values are copied
+ * here rather than invented, and `tests/review-access.test.ts` fails the build
+ * if they ever drift apart — so the reviewer sees the same demo car the app's
+ * own "Run demo scan" button produces, and the seeded scan is stored with
+ * `source: 'demo'` and badged as demo everywhere (AGENTS.md).
+ */
+export const REVIEWER_DEMO_VEHICLE = {
+  make: "Demo",
+  model: "Petrol hatchback",
+  year: 2016,
+  vin: "IMD3M0HATCH16X0001",
+  codes: [
+    { code: "P0420", status: "stored" },
+    { code: "P0171", status: "stored" },
+    { code: "P0301", status: "pending" },
+    { code: "P0442", status: "permanent" },
+  ],
+} as const;
+
+/* ------------------------------------------------------------------ */
+/* Default sign-in ports — real database, real email, real cookie       */
+/* ------------------------------------------------------------------ */
+
+/** `RATE_LIMIT_SECONDS` as a Postgres interval literal. */
+function rateWindowInterval(): string {
+  return `${RATE_LIMIT_SECONDS} seconds`;
+}
+
+/** A still-valid, unused magic link for this address? */
+async function hasLiveLoginToken(email: string): Promise<boolean> {
+  const rows = await db<{ token_hash: string }[]>`
+    SELECT token_hash FROM login_tokens
+    WHERE email = ${email}
+      AND used_at IS NULL
+      AND expires_at > now()
+    LIMIT 1`;
+  return rows.length > 0;
+}
+
+/** Any login_tokens row for this address inside the anti-spam window? */
+async function withinLoginRateWindow(email: string): Promise<boolean> {
+  const rows = await db<{ n: string }[]>`
+    SELECT count(*)::text AS n FROM login_tokens
+    WHERE email = ${email}
+      AND created_at > now() - ${rateWindowInterval()}::interval`;
+  return Number(rows[0]?.n ?? 0) > 0;
+}
+
+/** Mint a magic link: persist the hash, email the raw token. */
+async function issueMagicLinkFor(email: string): Promise<void> {
   const token = generateToken();
-  const tokenHash = hashToken(token);
   // The verify surface is the /app/verify route (it is exempt from the /app
   // route guard alongside /app/signin — see app/route.tsx).
   const link = `${siteOrigin()}/app/verify?token=${encodeURIComponent(token)}`;
 
   await db`
     INSERT INTO login_tokens (token_hash, email, expires_at)
-    VALUES (${tokenHash}, ${email}, now() + interval '15 minutes')`;
+    VALUES (${hashToken(token)}, ${email}, now() + ${`${LOGIN_TOKEN_TTL_MINUTES} minutes`}::interval)`;
 
   await sendEmail({
     to: email,
     subject: "Your iMechanic sign-in link",
     html: buildMagicLinkEmail(link),
   });
+}
 
-  return { ok: true };
+/**
+ * Record one access-code attempt. It is written into `login_tokens` — the very
+ * table the magic-link anti-spam window counts — so both sign-in paths share
+ * ONE limiter instead of two that can drift apart.
+ *
+ * The row can never be redeemed as a sign-in link: its `expires_at` is already
+ * past (so `verifyMagicLinkCore`, which requires `expires_at > now()`, refuses
+ * it) and it hashes a token that is thrown away.
+ */
+async function recordAccessCodeAttemptFor(email: string): Promise<void> {
+  await db`
+    INSERT INTO login_tokens (token_hash, email, expires_at)
+    VALUES (${hashToken(generateToken())}, ${email}, now())`;
+}
+
+/**
+ * The reviewer user: created on first use, repaired on every later use.
+ *
+ * `ON CONFLICT DO UPDATE` (not `DO NOTHING`) so the row is guaranteed to end
+ * up with `country = 'DE'` and `is_reviewer = true` even if a stray account for
+ * that address was created some other way. No email, no subscription row, no
+ * Pro entitlement is ever invented for this account.
+ */
+async function ensureReviewerUserRow(): Promise<AuthUser> {
+  const rows = await db<{ id: string; email: string; country: string | null }[]>`
+    INSERT INTO users (email, country, is_reviewer)
+    VALUES (${REVIEWER_EMAIL}, 'DE', true)
+    ON CONFLICT (email) DO UPDATE
+      SET country = 'DE', is_reviewer = true
+    RETURNING id, email, country`;
+  return rowToUser(rows[0]!);
+}
+
+/**
+ * The reviewer's demo content: ONE vehicle and ONE demo scan.
+ *
+ * Idempotent by content, not by attempt: it seeds only while the reviewer holds
+ * no scan at all, so signing in again never duplicates anything — and a
+ * reviewer who cleared or deleted their only scan gets it back rather than
+ * landing on an empty app.
+ *
+ * The scan goes through `saveScanCore` with `source: 'demo'` — the same path the
+ * app's own demo button takes — so it is persisted as demo, gets the normal
+ * rules verdict and cost bands, and is badge-labelled demo in every screen.
+ * (`scans-core` is imported dynamically, the established server→server pattern
+ * that keeps this module's static graph unchanged.)
+ */
+async function seedReviewerContent(userId: string): Promise<void> {
+  const scans = await db<{ n: string }[]>`
+    SELECT count(*)::text AS n FROM scans WHERE user_id = ${userId}`;
+  if (Number(scans[0]?.n ?? 0) > 0) return;
+
+  const { createVehicleCore, saveScanCore } = await import("./scans-core");
+
+  const vehicles = await db<{ id: string }[]>`
+    SELECT id FROM vehicles
+    WHERE user_id = ${userId}
+    ORDER BY created_at ASC
+    LIMIT 1`;
+  const vehicleId =
+    vehicles[0]?.id ??
+    (
+      await createVehicleCore(userId, {
+        make: REVIEWER_DEMO_VEHICLE.make,
+        model: REVIEWER_DEMO_VEHICLE.model,
+        year: REVIEWER_DEMO_VEHICLE.year,
+      })
+    ).id;
+
+  await saveScanCore(userId, {
+    source: "demo",
+    vehicleId,
+    vin: REVIEWER_DEMO_VEHICLE.vin,
+    codes: REVIEWER_DEMO_VEHICLE.codes.map((entry) => ({ ...entry })),
+  });
+}
+
+/** Mint a session for a known user id and set the session cookie. */
+async function startSessionFor(userId: string): Promise<void> {
+  const sessionToken = generateToken();
+  await db`
+    INSERT INTO sessions (token_hash, user_id, expires_at)
+    VALUES (${hashToken(sessionToken)}, ${userId}, now() + ${`${SESSION_TTL_DAYS} days`}::interval)`;
+  setSessionCookie(sessionToken);
+}
+
+/** The production ports: real database, real email, real cookie. */
+export function defaultSignInPorts(): SignInPorts {
+  return {
+    reviewCode: reviewAccessCode,
+    hasLiveToken: hasLiveLoginToken,
+    withinRateWindow: withinLoginRateWindow,
+    issueMagicLink: issueMagicLinkFor,
+    recordAccessCodeAttempt: recordAccessCodeAttemptFor,
+    ensureReviewerUser: ensureReviewerUserRow,
+    seedReviewerContent,
+    startSession: startSessionFor,
+  };
 }
 
 /** Verify a magic-link token (atomic single-use), upsert the user, create a

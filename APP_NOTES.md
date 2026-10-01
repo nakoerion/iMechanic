@@ -1949,3 +1949,107 @@ then create `android/keystore.properties` (git-ignored) with `storeFile` /
   **no APK and no AAB was produced**, and no Play upload was attempted. A real signed
   AAB needs the owner's real upload key, which does not exist yet and must never be
   committed.
+
+## S10-T2 — review-only access path for Google Play (engineer, branch `s10-t2-review-access`) — 2026-10-01
+
+**What this is.** Google Play's app-access review needs a reviewer to get *inside*
+`/app/*`, which sits behind iMechanic's magic-link auth — and a store reviewer has no
+inbox with us. `REVIEW_ACCESS_CODE` switches on a second, code-based sign-in path for
+exactly one address.
+
+**It is OFF unless the owner turns it on.** With `REVIEW_ACCESS_CODE` unset or blank
+(the normal state, and the state of every environment today):
+- `/app/signin` renders the single-step form exactly as before — no "Access code"
+  field, no extra copy, nothing review-shaped in the DOM;
+- `requestMagicLink` never returns the `codeRequired` field, so the browser has no
+  other branch to take;
+- `submitReviewCode` answers neutrally at once and writes **nothing** — no user, no
+  session, not even a rate-limit row.
+
+The decision is an env read at call time (`reviewAccessCode()`), not a build-time flag,
+so adding or deleting the secret takes effect on the next request — no rebuild, no
+publish.
+
+**When it IS set** (`REVIEW_ACCESS_CODE=<long random string>`):
+1. Submitting `playreview@imechanic.app` makes `requestMagicLink` answer
+   `{ ok: true, codeRequired: true }` and mints or sends nothing. The form swaps its one
+   action to an "Access code" field (the email becomes read-only, with a "use a
+   different email" escape back).
+2. `submitReviewCode({ email, code })` → `submitReviewCodeCore`:
+   - the address must be exactly `playreview@imechanic.app` (through the same
+     `normaliseEmail` every address goes through). Anything else answers neutrally and
+     records nothing — "this address is special" is not learnable from a failed attempt;
+   - the **same anti-spam window** `requestMagicLinkCore` uses (`RATE_LIMIT_SECONDS` =
+     60s, counted over `login_tokens.created_at`) throttles attempts: one per minute,
+     checked *before* the comparison so a guess flood is throttled rather than answered.
+     The attempt row is written with an already-expired `expires_at`, so it can never be
+     redeemed as a magic link;
+   - `tokensEqual()` (SHA-256 + `timingSafeEqual` — the same constant-time compare
+     sessions use) checks the code;
+   - on success: the `users` row gets `country='DE'` and `is_reviewer=true`, one demo
+     vehicle (Demo / Petrol hatchback / 2016) and one demo scan written **through
+     `saveScanCore` with `source='demo'`** — the same path the app's own demo button
+     takes, so it carries the normal rules verdict and cost bands and is badge-labelled
+     demo on every screen (AGENTS.md). Seeding is idempotent: it runs only while the
+     reviewer holds no scan, so it never duplicates anything and repairs an account whose
+     only scan was cleared or deleted;
+   - then a real 30-day session is minted and the browser reloads `/app`.
+3. **No oracle.** A wrong code, a wrong address, an off deployment and a rate-limited
+   attempt all answer the byte-identical `{ ok: true, signedIn: false }` (two fields, no
+   reason), and the browser shows the SAME "check your email" screen any other address
+   gets. The only thing a guesser learns is what the design already shows them: that
+   address has a code field.
+
+**Rotation — mandatory.** `REVIEW_ACCESS_CODE` must be **rotated or unset whenever a
+store review is not in progress** (Play review is a window, not a permanent state).
+Rotate by replacing the secret value in Settings → Secrets; turn the path off by
+deleting it. Treat the code as a password: it is never logged, never echoed to the
+client, never stored — only compared.
+
+**Excluding the reviewer from any future metric.** Two markers, both one-line filters:
+- the address `playreview@imechanic.app` (the human-readable one);
+- `users.is_reviewer = true` (added by migration `005_review_access.sql`; `false` for
+  every other account).
+
+So `... WHERE NOT u.is_reviewer` — or `email <> 'playreview@imechanic.app'` — removes the
+review account from any count, export or dashboard. The app ships no analytics SDK
+today; the column is deliberately forward-looking and costs nothing. The reviewer is a
+free-tier account on purpose: no Stripe subscription and no Pro entitlement is invented
+for it, so a Pro-conversion metric is unaffected either way.
+
+**Files.** `src/server/auth-core.ts` (`reviewAccessCode` / `isReviewerEmail`, the
+`SignInPorts` seam, `requestMagicLinkCore`, `submitReviewCodeCore`,
+`REVIEWER_DEMO_VEHICLE`), `src/server/auth.ts` (`submitReviewCode`),
+`src/routes/app/signin.tsx` (the code step), `src/lib/copy.ts` (`signIn.reviewCode*`),
+`db/migrations/005_review_access.sql`, `tests/review-access.test.ts` (22 tests).
+
+**Verified.**
+- 22 unit tests through the injected `SignInPorts` seam (no DB): off-by-default (no
+  field, ordinary magic-link path, nothing written), neutral-on-wrong-code and
+  identical-shape answers, the window refusing a second attempt before the compare,
+  correct code → ensure user → seed → session in that order, the ordinary magic-link
+  flow unchanged (live token / rate window still suppress a send), plus a drift guard
+  that `REVIEWER_DEMO_VEHICLE` still equals `DEMO_DATASET` and `DEMO_VIN`.
+- The real default ports driven against the live Neon database: `users` row
+  `country=DE, is_reviewer=true`; exactly one demo vehicle; exactly one scan
+  `source='demo'` attached to it with 4 codes and a `source='rules'` diagnosis
+  (`repair_soon`, DIY 57500 / shop 115000 EUR); a session row; 0 subscription rows;
+  live proof that a second attempt inside 60s is refused; a re-seed after deleting the
+  scans left exactly one vehicle and one scan (no duplicate) — then every row deleted
+  (0 orphans, verified).
+- `bun run migrate` applied `005_review_access.sql` and re-ran clean.
+- `/app/signin` loaded in a real browser at 390x844 and 1280x800 against the dev
+  environment, which serves this new module (`codeRequired` / `reviewCodeLabel` /
+  `submitReviewCode` present in the served file): one input, "Send magic link", no
+  "Access code" language anywhere in the DOM, no console errors.
+
+**Not verified (honest).** The ON path was never exercised over HTTP end-to-end: the
+code lives in the owner's Secrets, which this environment cannot set. `setSessionCookie`
+also cannot run outside a request context, so the session *row* was verified but the
+cookie set itself was not re-exercised (it is the same helper magic-link sign-in already
+uses in production). Nobody has signed in as `playreview@imechanic.app`, and that account
+does not exist in the database right now — it is created on the first correct code.
+
+**Owner action before the review window.** Add `REVIEW_ACCESS_CODE` (a long random
+string) in Settings → Secrets, put that code in the Play "App access" instructions next
+to the address `playreview@imechanic.app`, then delete the secret once review closes.
