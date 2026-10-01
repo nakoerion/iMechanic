@@ -1833,3 +1833,72 @@ land there. Two links did: the legal pages' brand mark
   `./gradlew :app:assembleDebug` (first run downloads AGP 8.10.1 + the AndroidX
   set), plus a real Android 16 device pass for the edge-to-edge layout, the
   ≥600dp orientation change, and a BLE connect/notify against a real adapter.
+
+## S10-T1 — release signing configuration (engineer, branch `s10-t1-release-signing`) — 2026-10-01
+
+**Why.** S7 produced the native shells and S9d cleared the Play policy blockers, but
+there was still no way to produce a *signed* `.aab` — `android/app/build.gradle` had
+no `signingConfig` at all, so `bundleRelease` could only emit an unsigned artifact
+that Google Play refuses. This slice adds the signing configuration; it does not
+create, and must never contain, a real keystore.
+
+**What was built** — `android/app/build.gradle`, three additions:
+
+1. A credential-loading block at the top of the script (configuration time, before
+   the `android {}` block), standard Capacitor/AGP key names:
+   - `android/keystore.properties` — **optional**, git-ignored: `storeFile`,
+     `storePassword`, `keyAlias`, `keyPassword`. Loaded with
+     `new Properties()` + `withInputStream { load(it) }` only when
+     `rootProject.file('keystore.properties').exists()` is true, so a clean
+     checkout without the file configures exactly as before.
+   - `IMECHANIC_UPLOAD_STORE_FILE`, `IMECHANIC_UPLOAD_STORE_PASSWORD`,
+     `IMECHANIC_UPLOAD_KEY_ALIAS`, `IMECHANIC_UPLOAD_KEY_PASSWORD` as the CI /
+     no-file alternative.
+   - **Precedence: file first, then env, per key** — `keystoreProperties.getProperty(k) ?: System.getenv(K)`,
+     so a file value always wins over the matching variable.
+   - A relative `storeFile` is resolved against `android/` (the root project dir),
+     which is stated in the comment above it.
+2. `signingConfigs { release { … } }` inside `android {}`, populated **only** when
+   all four values are present. The config is declared unconditionally so the name
+   always resolves, but an incomplete one is never bound to a build type.
+3. `buildTypes.release` binds `signingConfig signingConfigs.release` **only** when
+   credentials are present. With none, AGP keeps its default behaviour: an
+   unsigned `app-release-unsigned.apk` / `.aab`, with a `logger.warn` printed at
+   configuration time ("The release build will be UNSIGNED … not uploadable to
+   Google Play. The debug build is unaffected."). A partial credential set names
+   exactly which of the four keys is missing instead of silently half-signing.
+   `debug` has no signing config and is not touched by any of this.
+
+**Version discipline comment.** `versionCode 1` / `versionName "1.0"` are unchanged
+(no release has been uploaded, so the numbers are still correct), but they now carry
+the standing rule in-code: versionCode +1 on *every* Play upload (Play rejects a
+re-used or lower number, and a burned number can never be reused), versionName
+follows semver, both bumped in the same PR as the release tag.
+
+**Ignore rules.** `android/.gitignore` gained `keystore.properties`, `*.keystore`,
+`*.jks`; the root `.gitignore` repeats them as a repo-wide net (a key dropped in
+`native/` or `/` is caught too). Verified with `git check-ignore -v` and by touching
+throwaway `android/keystore.properties`, `android/app/imechanic-upload.jks` and
+`native/tmp-proof.keystore`: all three matched (android/.gitignore:107/:109 and
+.gitignore:32), `git status --porcelain` listed **none** of them, and
+`git ls-files --cached -i --exclude-standard` is empty (no already-tracked file is
+now ignored). The temp files were deleted again. No keystore, password or key file is
+committed by this slice — there is none in the repo.
+
+**How the owner creates the upload key** (do this once, outside the repo, and back
+the file up — losing it means losing the ability to update the app on Play):
+
+```bash
+keytool -genkeypair -v -keystore ~/imechanic-upload.jks \
+  -alias upload -keyalg RSA -keysize 2048 -validity 10000
+```
+
+then create `android/keystore.properties` (git-ignored) with `storeFile` /
+`storePassword` / `keyAlias` / `keyPassword`, or export the four
+`IMECHANIC_UPLOAD_*` variables. `./gradlew bundleRelease` then produces a signed AAB.
+
+**Verification — and exactly what could not be verified.**
+
+- `.gitignore` proof: as above (three paths ignored, clean `git status`).
+- `bun run test`, `bun run build`, `bunx tsc --noEmit`: results below.
+- **Gradle configuration proof: result below.**

@@ -99,3 +99,11 @@ app/src/main/assets/public
 app/src/main/assets/capacitor.config.json
 app/src/main/assets/capacitor.plugins.json
 app/src/main/res/xml/config.xml
+
+# S10-T1: release (Play upload) signing material — never commit any of this.
+# keystore.properties holds the store/key passwords (see android/app/build.gradle);
+# *.jks / *.keystore are the signing keys themselves. Losing either means losing
+# the ability to update the app on Play, so they live outside git on purpose.
+keystore.properties
+*.keystore
+*.jks

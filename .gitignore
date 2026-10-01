@@ -23,3 +23,11 @@ src/routeTree.gen.ts
 # Native wrapper build output (S7). The web assets are copied here by
 # `bun run native:prepare`; the committed shell files stay in native/www.
 /native/www/app/
+
+# Release signing material (S10-T1). Belt and braces: the Android-specific entries
+# live in android/.gitignore, and these catch a key or password file dropped
+# anywhere else in the tree. Never commit these — a leaked upload key cannot be
+# un-leaked, and losing it means losing the ability to update the app on Play.
+keystore.properties
+*.keystore
+*.jks

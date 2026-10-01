@@ -3,6 +3,67 @@ apply plugin: 'kotlin-android'
 
 apply plugin: 'com.android.application'
 
+// ─── S10-T1: release (Play upload) signing ──────────────────────────────────
+// Credentials are read from EITHER of two places, in this order:
+//
+//   1. android/keystore.properties — OPTIONAL, git-ignored, uses the standard
+//      Capacitor/AGP key names:
+//        storeFile=imechanic-upload.jks   # absolute, or relative to android/
+//        storePassword=…
+//        keyAlias=upload
+//        keyPassword=…
+//   2. the IMECHANIC_UPLOAD_* environment variables, for CI or a machine with no
+//      properties file:
+//        IMECHANIC_UPLOAD_STORE_FILE, IMECHANIC_UPLOAD_STORE_PASSWORD,
+//        IMECHANIC_UPLOAD_KEY_ALIAS, IMECHANIC_UPLOAD_KEY_PASSWORD
+//
+// A value set in keystore.properties wins over the matching env var.
+// The properties file is optional: a clean checkout has none, so its absence is
+// loaded defensively and must never fail the configure phase. If neither source
+// yields a complete set of four values, the release build type gets no
+// signingConfig at all — AGP then falls back to its normal UNSIGNED release
+// (app-release-unsigned.apk / .aab) and a warning is logged here at
+// configuration time. The debug build never touches this block.
+def keystorePropertiesFile = rootProject.file('keystore.properties')
+def keystoreProperties = new Properties()
+def hasKeystorePropertiesFile = keystorePropertiesFile.exists()
+if (hasKeystorePropertiesFile) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+
+def uploadStoreFileValue = keystoreProperties.getProperty('storeFile') ?: System.getenv('IMECHANIC_UPLOAD_STORE_FILE')
+def uploadStorePassword = keystoreProperties.getProperty('storePassword') ?: System.getenv('IMECHANIC_UPLOAD_STORE_PASSWORD')
+def uploadKeyAlias = keystoreProperties.getProperty('keyAlias') ?: System.getenv('IMECHANIC_UPLOAD_KEY_ALIAS')
+def uploadKeyPassword = keystoreProperties.getProperty('keyPassword') ?: System.getenv('IMECHANIC_UPLOAD_KEY_PASSWORD')
+
+// A relative storeFile is resolved against android/ (the root project dir).
+def uploadStoreFile = uploadStoreFileValue ? rootProject.file(uploadStoreFileValue) : null
+
+def uploadSigningProblems = []
+if (!uploadStoreFile) {
+    uploadSigningProblems << 'storeFile'
+} else if (!uploadStoreFile.exists()) {
+    uploadSigningProblems << "storeFile (no file at ${uploadStoreFile})"
+}
+if (!uploadStorePassword) { uploadSigningProblems << 'storePassword' }
+if (!uploadKeyAlias) { uploadSigningProblems << 'keyAlias' }
+if (!uploadKeyPassword) { uploadSigningProblems << 'keyPassword' }
+
+def hasUploadSigning = uploadSigningProblems.isEmpty()
+def uploadSigningSource = hasKeystorePropertiesFile ? 'android/keystore.properties' : 'the IMECHANIC_UPLOAD_* environment variables'
+
+if (hasUploadSigning) {
+    logger.lifecycle("iMechanic release signing: using credentials from ${uploadSigningSource}.")
+} else if (hasKeystorePropertiesFile || uploadStoreFileValue || uploadStorePassword || uploadKeyAlias || uploadKeyPassword) {
+    logger.warn("iMechanic release signing: credentials are INCOMPLETE (missing: ${uploadSigningProblems.join(', ')}). " +
+        "The release build will be UNSIGNED, so it cannot be uploaded to Google Play. " +
+        "Set all four keys in android/keystore.properties, or all four IMECHANIC_UPLOAD_* environment variables.")
+} else {
+    logger.warn("iMechanic release signing: neither android/keystore.properties nor the IMECHANIC_UPLOAD_* " +
+        "environment variables are present. The release build will be UNSIGNED — fine for a local smoke test, " +
+        "not uploadable to Google Play. The debug build is unaffected.")
+}
+
 android {
     namespace "app.imechanic"
     compileSdk rootProject.ext.compileSdkVersion
@@ -10,6 +71,13 @@ android {
         applicationId "app.imechanic"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
+        // ─── Release version discipline — read before bumping ───────────────
+        // versionCode must increase by exactly 1 on EVERY Play upload: Google Play
+        // rejects an upload whose versionCode is not higher than the last one it
+        // accepted, and a number used once is permanently burned. versionName is
+        // the human-facing string and follows semver (1.0 → 1.0.1 → 1.1 → 2.0).
+        // Bump BOTH here in the same PR that creates the release tag, so the tag,
+        // the build and the store listing can never disagree.
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
@@ -25,8 +93,29 @@ android {
     kotlinOptions {
         jvmTarget = "21"
     }
+    // Populated only when a complete credential set was found in the S10-T1
+    // block at the top of this file. The config is declared unconditionally (so
+    // the name always resolves) but an incomplete one is never bound to a build
+    // type, which keeps AGP on its default unsigned-release path instead of
+    // failing a signing task on a clean checkout.
+    signingConfigs {
+        release {
+            if (hasUploadSigning) {
+                storeFile uploadStoreFile
+                storePassword uploadStorePassword
+                keyAlias uploadKeyAlias
+                keyPassword uploadKeyPassword
+            }
+        }
+    }
     buildTypes {
         release {
+            // Bound only when credentials are present. With no signingConfig the
+            // release build is unsigned and Play will refuse it — the warning from
+            // the S10-T1 block above says so at configuration time.
+            if (hasUploadSigning) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
