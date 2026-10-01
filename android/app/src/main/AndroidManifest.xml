@@ -44,13 +44,19 @@
       Bluetooth LE, for talking to the car's OBD2 adapter and nothing else
       (slice S7). Android 12+ uses the split BLUETOOTH_SCAN / BLUETOOTH_CONNECT
       permissions; `neverForLocation` asserts that scan results are not used to
-      derive location (they are used to pick an OBD2 adapter). Android 11 and
-      below need the legacy Bluetooth permissions plus location, which is why
-      those are capped at SDK 30.
+      derive location (they are used to pick an OBD2 adapter).
+
+      Slice S10-T3: the three legacy entries that used to live here —
+      BLUETOOTH, BLUETOOTH_ADMIN and ACCESS_FINE_LOCATION, each capped at
+      `android:maxSdkVersion="30"` — are DELETED, because minSdk is now 31
+      (android/variables.gradle). They could never grant anything on a device
+      that can install the app, and ACCESS_FINE_LOCATION in particular is a
+      permission this product must never request: the Play data-safety form and
+      the privacy policy can now both say the app declares ZERO location
+      permissions. Do not re-add them without raising minSdk back down, and do
+      not re-add them to satisfy an old tutorial — Android 11 and older are not
+      supported.
     -->
-    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
-    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" />
     <uses-permission
         android:name="android.permission.BLUETOOTH_SCAN"
         android:usesPermissionFlags="neverForLocation"
