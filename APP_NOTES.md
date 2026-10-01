@@ -1833,3 +1833,119 @@ land there. Two links did: the legal pages' brand mark
   `./gradlew :app:assembleDebug` (first run downloads AGP 8.10.1 + the AndroidX
   set), plus a real Android 16 device pass for the edge-to-edge layout, the
   ≥600dp orientation change, and a BLE connect/notify against a real adapter.
+
+## S10-T1 — release signing configuration (engineer, branch `s10-t1-release-signing`) — 2026-10-01
+
+**Why.** S7 produced the native shells and S9d cleared the Play policy blockers, but
+there was still no way to produce a *signed* `.aab` — `android/app/build.gradle` had
+no `signingConfig` at all, so `bundleRelease` could only emit an unsigned artifact
+that Google Play refuses. This slice adds the signing configuration; it does not
+create, and must never contain, a real keystore.
+
+**What was built** — `android/app/build.gradle`, three additions:
+
+1. A credential-loading block at the top of the script (configuration time, before
+   the `android {}` block), standard Capacitor/AGP key names:
+   - `android/keystore.properties` — **optional**, git-ignored: `storeFile`,
+     `storePassword`, `keyAlias`, `keyPassword`. Loaded with
+     `new Properties()` + `withInputStream { load(it) }` only when
+     `rootProject.file('keystore.properties').exists()` is true, so a clean
+     checkout without the file configures exactly as before.
+   - `IMECHANIC_UPLOAD_STORE_FILE`, `IMECHANIC_UPLOAD_STORE_PASSWORD`,
+     `IMECHANIC_UPLOAD_KEY_ALIAS`, `IMECHANIC_UPLOAD_KEY_PASSWORD` as the CI /
+     no-file alternative.
+   - **Precedence: file first, then env, per key** — `keystoreProperties.getProperty(k) ?: System.getenv(K)`,
+     so a file value always wins over the matching variable.
+   - A relative `storeFile` is resolved against `android/` (the root project dir),
+     which is stated in the comment above it.
+2. `signingConfigs { release { … } }` inside `android {}`, populated **only** when
+   all four values are present. The config is declared unconditionally so the name
+   always resolves, but an incomplete one is never bound to a build type.
+3. `buildTypes.release` binds `signingConfig signingConfigs.release` **only** when
+   credentials are present. With none, AGP keeps its default behaviour: an
+   unsigned `app-release-unsigned.apk` / `.aab`, with a `logger.warn` printed at
+   configuration time ("The release build will be UNSIGNED … not uploadable to
+   Google Play. The debug build is unaffected."). A partial credential set names
+   exactly which of the four keys is missing instead of silently half-signing.
+   `debug` has no signing config and is not touched by any of this.
+
+**Version discipline comment.** `versionCode 1` / `versionName "1.0"` are unchanged
+(no release has been uploaded, so the numbers are still correct), but they now carry
+the standing rule in-code: versionCode +1 on *every* Play upload (Play rejects a
+re-used or lower number, and a burned number can never be reused), versionName
+follows semver, both bumped in the same PR as the release tag.
+
+**Ignore rules.** `android/.gitignore` gained `keystore.properties`, `*.keystore`,
+`*.jks`; the root `.gitignore` repeats them as a repo-wide net (a key dropped in
+`native/` or `/` is caught too). Verified with `git check-ignore -v` and by touching
+throwaway `android/keystore.properties`, `android/app/imechanic-upload.jks` and
+`native/tmp-proof.keystore`: all three matched (android/.gitignore:107/:109 and
+.gitignore:32), `git status --porcelain` listed **none** of them, and
+`git ls-files --cached -i --exclude-standard` is empty (no already-tracked file is
+now ignored). The temp files were deleted again. No keystore, password or key file is
+committed by this slice — there is none in the repo.
+
+**How the owner creates the upload key** (do this once, outside the repo, and back
+the file up — losing it means losing the ability to update the app on Play):
+
+```bash
+keytool -genkeypair -v -keystore ~/imechanic-upload.jks \
+  -alias upload -keyalg RSA -keysize 2048 -validity 10000
+```
+
+then create `android/keystore.properties` (git-ignored) with `storeFile` /
+`storePassword` / `keyAlias` / `keyPassword`, or export the four
+`IMECHANIC_UPLOAD_*` variables. `./gradlew bundleRelease` then produces a signed AAB.
+
+**Verification — and exactly what could not be verified.**
+
+- `.gitignore` proof: `git check-ignore -v` resolves `android/keystore.properties`
+  → `android/.gitignore:107`, `android/imechanic-upload-test.jks` → `:109`,
+  `native/tmp-proof.keystore` → `.gitignore:32`; with both throwaway files actually
+  present inside `android/`, `git status --porcelain` printed **nothing**, and
+  `git ls-files --cached -i --exclude-standard` is empty. All throwaway files were
+  deleted again and the tree is clean.
+- `bun run test` → **242 passed / 16 skipped, exit 0** (`16 passed | 2 skipped` test
+  files; the 2 DB-backed suites still skip without `TEST_DATABASE_URL`).
+- `bun run build` → clean, `BUILD_EXIT=0`. `bunx tsc --noEmit` → `TSC_EXIT=0`.
+- **Gradle/AGP proof: ACHIEVED on this box — all four credential states, with real
+  Gradle 8.11.1 + AGP 8.10.1 + Android SDK 36, driven by a throwaway self-signed
+  keystore that lives inside `android/`, is never committed, and was deleted at the
+  end.** Getting there needed a toolchain built from scratch (there was **no** JDK,
+  Gradle, Android SDK or `/opt/android-env.sh` on the box — apt as root plus the
+  Gradle and cmdline-tools zips; see the `android-build-config` skill's
+  `bootstrap-toolchain.sh`). Command used throughout:
+  `gradle :app:help --no-daemon --max-workers=1 -Dorg.gradle.jvmargs=-Xmx1400m`.
+
+  1. **No credentials at all** (the clean-checkout case): `BUILD SUCCESSFUL`,
+     `GRADLE_HELP_EXIT=0`, with
+     *"iMechanic release signing: neither android/keystore.properties nor the
+     IMECHANIC_UPLOAD_* environment variables are present. The release build will be
+     UNSIGNED — fine for a local smoke test, not uploadable to Google Play. The debug
+     build is unaffected."*
+  2. **`android/keystore.properties`** (with a *relative* `storeFile`):
+     `iMechanic release signing: using credentials from android/keystore.properties.`
+     and `:app:signingReport` reports `Variant: release → Config: release`,
+     `Store: /home/team/shared/site/android/imechanic-upload-test.jks`,
+     `Alias: upload` with real MD5/SHA-1/SHA-256 fingerprints — so the relative path
+     really does resolve against `android/`, and the release variant really is bound
+     to the config. `:app:validateSigningRelease` → **BUILD SUCCESSFUL** (task
+     actually executed, not skipped).
+  3. **Environment variables only** (props file moved away): the message switches to
+     *"using credentials from the IMECHANIC_UPLOAD_* environment variables"*, and
+     `:app:validateSigningRelease` → **BUILD SUCCESSFUL** (`UP-TO-DATE`, i.e. the same
+     resolved config as state 2 — exactly what file-then-env precedence should give).
+  4. **Incomplete set** (three of four vars, `keyPassword` cleared):
+     *"credentials are INCOMPLETE (missing: keyPassword). The release build will be
+     UNSIGNED …"*, `:app:help` → `BUILD SUCCESSFUL`; and
+     `:app:validateSigningRelease` does not exist at all in that state
+     ("task 'validateSigningRelease' not found in project ':app'") — AGP has no
+     signing task to run, which is the unsigned path by construction.
+
+  This also retires the S9d note above that the configuration phase could not be
+  proven on this box — it can, with free memory and `-Xmx1400m`.
+
+- **Not claimed:** no `:app:assembleDebug` / `assembleRelease` / `bundleRelease`, so
+  **no APK and no AAB was produced**, and no Play upload was attempted. A real signed
+  AAB needs the owner's real upload key, which does not exist yet and must never be
+  committed.
