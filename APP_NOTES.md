@@ -1741,6 +1741,8 @@ land there. Two links did: the legal pages' brand mark
 
 - `android/variables.gradle`: `compileSdkVersion = 36`, `targetSdkVersion = 36`,
   **minSdkVersion stays 23** (a cheap adapter in an old car is the product).
+  *Superseded by S10-T3, which raised minSdkVersion to 31 — see the S10-T3
+  section at the end of this file.*
 - AndroidX moved to the versions Capacitor itself ships for API 36, read off
   `android-template/variables.gradle` and
   `@capacitor/android@8.5.2/capacitor/build.gradle`: activity 1.11.0, appcompat
@@ -2053,3 +2055,95 @@ does not exist in the database right now — it is created on the first correct 
 **Owner action before the review window.** Add `REVIEW_ACCESS_CODE` (a long random
 string) in Settings → Secrets, put that code in the Play "App access" instructions next
 to the address `playreview@imechanic.app`, then delete the secret once review closes.
+
+## S10-T3 — minSdk 31, the release runbook, and the full pre-flight (engineer, branch `s10-t3-minsdk31-release-runbook`) — 2026-10-01
+
+**Part 1 — `minSdkVersion` 23 → 31 (Android 12), owner-directed.**
+
+- `android/variables.gradle`: `minSdkVersion = 31`; `compileSdkVersion` and
+  `targetSdkVersion` stay **36**. The rationale sits directly above the value (an
+  S10-T3 block comment), not only here, so the next person to open the file sees
+  it: Android 12 is the first release with *Bluetooth-only* scan permissions
+  (`BLUETOOTH_SCAN` / `BLUETOOTH_CONNECT`); below it, Android hands a BLE scan the
+  **location** permission because there is no Bluetooth-only option. Because minSdk
+  is 31, every legacy entry capped `android:maxSdkVersion="30"` is dead on every
+  device that can install the app. Android 12+ covers the overwhelming majority of
+  active devices and all realistic BLE-adapter users. Implemented exactly as
+  directed — the trade-off (older phones can no longer install the app) is the
+  owner's call and is recorded in `docs/RELEASE.md` §9 as a thing not to undo.
+- `android/app/src/main/AndroidManifest.xml`: the three legacy `uses-permission`
+  entries were **deleted** — `android.permission.BLUETOOTH`,
+  `android.permission.BLUETOOTH_ADMIN` and `android.permission.ACCESS_FINE_LOCATION`
+  (each carried `android:maxSdkVersion="30"`). Kept: `BLUETOOTH_SCAN` (with
+  `android:usesPermissionFlags="neverForLocation"`, `tools:targetApi="s"`) and
+  `BLUETOOTH_CONNECT`. The manifest now declares exactly three permissions —
+  `INTERNET`, `BLUETOOTH_SCAN`, `BLUETOOTH_CONNECT`, i.e. **ZERO location
+  permissions**. That is the point of the slice: the Play *Data safety* location
+  section is a blanket "no", and Android never shows a location prompt in front of
+  a first scan. The comment above the kept entries records the deletion and forbids
+  re-adding them without lowering minSdk again.
+- `cordovaAndroidVersion` comment corrected: staying at `10.1.1` was originally
+  forced by minSdk 23 (cordova-android 13+ raises its library minSdk to 24). That
+  constraint is gone with minSdk 31, but 10.1.1 is still what Capacitor 7 itself
+  ships, so **no version was changed** — only the stale reason was rewritten.
+- `src/routes/privacy.tsx` was updated **in the same commit**, because the old text
+  publicly claimed the app declares `ACCESS_FINE_LOCATION` capped at Android 11.
+  That became false the moment the permission was deleted, and AGENTS.md/the S9b
+  rule is explicit: if the code changes, the page changes in the same PR. It now
+  reads: no location permission at all, on any Android version, and the app
+  supports **Android 12 and newer** only. The file-header provenance comment (which
+  maps every public claim to its source) was updated with it.
+
+**Part 2 — `docs/RELEASE.md` (new).** The owner-facing, copy-pasteable runbook to
+produce and upload the Play bundle: the one-line `keytool -genkeypair` command and
+the back-it-up-where-else rule; `android/keystore.properties` with its four keys
+(`storeFile` / `storePassword` / `keyAlias` / `keyPassword`) and the
+`IMECHANIC_UPLOAD_*` environment-variable alternative, including what the
+configuration-time log line looks like in each credential state; the mandatory
+versionCode/versionName bump rule (S10-T1 discipline); `bun run build` →
+`bun run native:prepare` → `npx cap sync android` → `cd android && ./gradlew
+bundleRelease`; the output path
+`android/app/build/outputs/bundle/release/app-release.aab` with `jarsigner -verify`
+(bundle must not be `-unsigned`) and an optional `bundletool dump manifest` check
+for the persisted `minSdk 31`; the Play Console steps (internal testing first,
+Data safety with zero location, app access with the S10-T2 review code, store
+assets already produced in `design/store/`); the device smoke test; and a short
+"things that must not be fixed" section (don't lower minSdk back, don't add a
+purchase button, don't commit the keystore).
+
+**Pre-flight, run on this box.**
+
+- `bunx tsc --noEmit` → **TSC_EXIT=0**, zero output (the green gate from PR #15).
+- `bun run build` → **BUILD_EXIT=0**, clean.
+- `bun run test` → **TEST_EXIT=0** — `Test Files 17 passed | 2 skipped (19)`, `Tests 264 passed | 16 skipped (280)`.
+  Skipped cases, all database-backed and owner-gated on `TEST_DATABASE_URL`: `tests/obd.test.ts` (3 of 22 cases), `tests/migrate.test.ts` (2 of 2 cases), `tests/schema.test.ts` (11 of 11 cases). No test database was invented and no suite was edited to skip. Running them for real still requires the owner to add `TEST_DATABASE_URL` in Settings -> Secrets; when it lands, the same `bun run test` exercises them with no code change.
+- **Android manifest check** (the thing that proves deleting three permissions did
+  not break the build): `:app:processReleaseMainManifest` →
+  **GRADLE_EXIT=0** (BUILD SUCCESSFUL). Run as
+  `gradle :app:processReleaseMainManifest --no-daemon --max-workers=1
+  -Dorg.gradle.jvmargs=-Xmx1400m` with `ANDROID_HOME=/opt/s10/android-sdk`,
+  `GRADLE_USER_HOME=/opt/s10/gradle-home` and the JDK 21 on this box. That task runs
+  the **real manifest merger** for the release variant: it resolves
+  `minSdkVersion`/`targetSdkVersion` from `variables.gradle`, merges the library
+  manifests and writes
+  `android/app/build/intermediates/merged_manifest*/release/AndroidManifest.xml`, so
+  it fails loudly if a removed permission was actually required by a dependency or
+  if the manifest is malformed.
+
+**The `TEST_DATABASE_URL` gap (unchanged, owner-gated).** Three suites are
+*DB-backed* and **skip** rather than run in this environment: `tests/schema.test.ts`
+and `tests/migrate.test.ts` skip entirely, and `tests/obd.test.ts` skips only its
+database branches while its pure-parser tests still run. **Nothing here was faked
+to make them pass** — no test database was invented, and no suite was edited to
+skip. Their being skipped is what makes `bun run test` exit non-zero despite every
+executed test passing (the same behaviour S9b/S10-T1 recorded). Running them for
+real still requires the owner to add `TEST_DATABASE_URL` to Settings → Secrets; the
+moment it lands, the same `bun run test` exercises them with no code change.
+
+**Not verified on this box (honest).** The full `bundleRelease` — the Kotlin
+compile of the `imechanic/ble` plugin plus the AAB packaging — was **not** run:
+3.9 GB of RAM with no swap has OOM-killed the Kotlin step before, and that is
+exactly the step `docs/RELEASE.md` hands to the owner's machine / Android Studio.
+No signed `.aab` was produced here, no Play upload happened, and no on-device smoke
+test was run — those are owner steps by design. The manifest-level configuration
+proof (above) is what this box can honestly provide.

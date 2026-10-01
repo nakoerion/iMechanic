@@ -1,8 +1,20 @@
 ext {
-    // Slice S9d — Android 16 (API 36). minSdkVersion stays 23: the whole point
-    // of the product is a cheap adapter in an out-of-warranty car, and dropping
-    // Android 6 to gain nothing would only shrink the reachable fleet.
-    minSdkVersion = 23
+    // Slice S10-T3 — Android 12 (API 31) minimum, owner-directed.
+    //
+    // Why 31 and not 23 (S9d's value): Android 12 is where BLE stops needing the
+    // location permission. Below it, Android makes the OS hand a BLE scan the
+    // location permission (there is no Bluetooth-only option), which is exactly
+    // the permission this app must never request. Because minSdk is 31, the
+    // legacy `BLUETOOTH`, `BLUETOOTH_ADMIN` and `ACCESS_FINE_LOCATION` entries
+    // (all capped `maxSdkVersion="30"`) are dead on every device that can install
+    // the app, so they have been DELETED from
+    // android/app/src/main/AndroidManifest.xml. The result is a manifest with
+    // ZERO location permissions — one fewer data-safety declaration to defend on
+    // the Play listing and one fewer scary system prompt in front of a first
+    // scan. Android 12+ covers the overwhelming majority of active devices and
+    // all realistic BLE-adapter users (a €10 ELM327 dongle is a phone bought in
+    // the last few years).
+    minSdkVersion = 31
     compileSdkVersion = 36
     targetSdkVersion = 36
     // Slice S9d — the AndroidX versions Capacitor itself ships for API 36 (read
@@ -23,9 +35,12 @@ ext {
     androidxJunitVersion = '1.3.0'
     androidxEspressoCoreVersion = '3.7.0'
     // Slice S9d — deliberately NOT bumped to Capacitor 8's 14.0.1: cordova-android
-    // 13+ raises the library's minSdk to 24, which the manifest merger rejects
-    // against our minSdkVersion 23. 10.1.1 is what Capacitor 7 ships and it is a
-    // prebuilt AAR, so a newer compileSdk does not affect it.
+    // 13+ raises the library's minSdk to 24. 10.1.1 is what Capacitor 7 ships and
+    // it is a prebuilt AAR, so a newer compileSdk does not affect it. (The
+    // original reason for staying at 10.1.1 was that minSdk 24 would have been
+    // rejected against our minSdkVersion 23; that constraint is gone now that
+    // S10-T3 raised minSdk to 31, but the version is still the one Capacitor 7
+    // itself ships, so it stays put.)
     cordovaAndroidVersion = '10.1.1'
     // Slice S7: the Kotlin Gradle plugin version is NOT here. It must be readable
     // while the buildscript block is evaluated (before this file is applied), so it

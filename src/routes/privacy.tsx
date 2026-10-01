@@ -8,8 +8,9 @@
  *                              as SHA-256 hashes)
  *  - theme storage           → src/lib/theme.ts (localStorage `imechanic.theme`)
  *  - Bluetooth               → android/app/src/main/AndroidManifest.xml
- *                              (`usesPermissionFlags="neverForLocation"`,
- *                              location capped at `maxSdkVersion="30"`), the
+ *                              (`usesPermissionFlags="neverForLocation"`; minSdk
+ *                              31 — S10-T3 — so no legacy Bluetooth or location
+ *                              entry remains at all), the
  *                              iOS usage strings in ios/App/App/Info.plist
  *  - the AI payload          → src/server/ai-core.ts `buildAiPrompt` +
  *                              src/server/scans-core.ts `loadAiContextCore`
@@ -192,13 +193,15 @@ function PrivacyPage() {
           derive location.
         </P>
         <P>
-          On <B>Android 11 and older</B>, Android requires the location
-          permission before any app may scan for Bluetooth devices at all — there
-          is no Bluetooth-only option on those versions. iMechanic declares that
-          permission capped at Android 11 for this one purpose, only to pair with
-          the adapter. On Android 12 and newer the app asks only for Bluetooth
-          permissions. On iOS the app asks for Bluetooth access, with the system
-          prompt stating that it is used only to connect to your OBD2 adapter.
+          iMechanic declares <B>no location permission at all</B>, on any
+          Android version. Older Android releases (11 and below) do not offer a
+          Bluetooth-only way to scan, so on those versions the operating system
+          would have demanded the location permission for a scan; the app
+          therefore supports <B>Android 12 and newer</B> only. Android 12
+          introduced the Bluetooth-only permissions, and those are what the
+          Android build asks for. On iOS the app asks for Bluetooth access, with
+          the system prompt stating that it is used only to connect to your OBD2
+          adapter.
         </P>
         <P>
           You can use iMechanic without Bluetooth at all: the demo scan and
