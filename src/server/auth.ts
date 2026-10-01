@@ -18,7 +18,13 @@ export type AuthUser = {
 };
 
 /** Request a magic link. Honest `{ ok: true }` whether or not the address
- * exists — no enumeration. */
+ * exists — no enumeration.
+ *
+ * S10-T2: when REVIEW_ACCESS_CODE is configured AND the address is the
+ * store-review address (`playreview@imechanic.app`), the answer is
+ * `{ ok: true, codeRequired: true }` and no link is minted or emailed — the
+ * form then shows the access-code step. With the variable unset that field is
+ * never present and this behaves exactly as it did before the slice. */
 export const requestMagicLink = createServerFn({ method: "POST" })
   .validator((input: unknown) => {
     const email = normaliseEmail(input);
@@ -28,6 +34,38 @@ export const requestMagicLink = createServerFn({ method: "POST" })
   .handler(async ({ data: email }) => {
     const { requestMagicLinkCore } = await import("./auth-core");
     return requestMagicLinkCore(email);
+  });
+
+/**
+ * Submit the review-only access code (S10-T2 — Google Play app access review).
+ *
+ * Reached only from the access-code step of /app/signin, which the browser
+ * shows only after `requestMagicLink` answered `{ codeRequired: true }`.
+ *
+ * The answer is exactly `{ ok: true, signedIn: boolean }`. `signedIn` is true
+ * only for a correct code on the reviewer address while REVIEW_ACCESS_CODE is
+ * set; wrong code, wrong address, path off and rate-limited all answer `false`
+ * with the same shape, and the client then renders the SAME neutral "check your
+ * email" screen any other address gets. No distinct error, no status
+ * difference — there is no oracle.
+ *
+ * The validator is deliberately lenient for the same reason: a malformed
+ * address or missing code is normalised to empty input that fails neutrally,
+ * rather than throwing a message only this route could produce. Real work
+ * (anti-spam window, constant-time compare, reviewer user, demo seed, session)
+ * all lives in `submitReviewCodeCore`.
+ */
+export const submitReviewCode = createServerFn({ method: "POST" })
+  .validator((input: unknown) => {
+    const raw = (input ?? {}) as { email?: unknown; code?: unknown };
+    return {
+      email: normaliseEmail(raw.email) ?? "",
+      code: typeof raw.code === "string" ? raw.code.trim().slice(0, 256) : "",
+    };
+  })
+  .handler(async ({ data: { email, code } }) => {
+    const { submitReviewCodeCore } = await import("./auth-core");
+    return submitReviewCodeCore(email, code);
   });
 
 /** Verify a magic-link token (atomic single-use), upsert the user, create a
