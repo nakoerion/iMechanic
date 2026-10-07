@@ -212,7 +212,7 @@ class IMechanicBlePlugin : Plugin() {
         )
         handler.postDelayed(
             scanTimeout,
-            maxOf(1_000L, call.getInt("timeoutMs", scanTimeoutMs.toInt()).toLong())
+            maxOf(1_000L, (call.getInt("timeoutMs", scanTimeoutMs.toInt()) ?: scanTimeoutMs.toInt()).toLong())
         )
     }
 
@@ -488,7 +488,7 @@ class IMechanicBlePlugin : Plugin() {
         writeBuffer.setLength(0)
         handler.postDelayed(
             writeTimeout,
-            maxOf(200L, call.getInt("timeoutMs", commandTimeoutMs.toInt()).toLong())
+            maxOf(200L, (call.getInt("timeoutMs", commandTimeoutMs.toInt()) ?: commandTimeoutMs.toInt()).toLong())
         )
         val accepted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             activeGatt.writeCharacteristic(tx, payload, writeType) == BluetoothGatt.GATT_SUCCESS
