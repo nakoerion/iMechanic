@@ -24,6 +24,19 @@ export default defineConfig({
     // must dial back on 443, not the dev port. If the socket can't connect,
     // pages still serve — hot reload degrades, never breaks.
     hmr: { clientPort: 443 },
+    // Never watch native build output or the published bundle: Gradle writes
+    // into android/ and ios/ during native builds, which used to flood the dev
+    // server with spurious "page reload" events (and waste CPU watching
+    // thousands of build files). Only real web-source changes should reload.
+    watch: {
+      ignored: [
+        "**/.git/**",
+        "**/node_modules/**",
+        "**/android/**",
+        "**/ios/**",
+        "**/dist/**",
+      ],
+    },
     // The dev server can serve source files; never let it serve local secrets,
     // and never let it serve anything outside the site dir. Gotchas this list
     // encodes: a custom `deny` REPLACES Vite's defaults (so .git must be
